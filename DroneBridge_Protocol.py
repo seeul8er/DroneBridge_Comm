@@ -9,7 +9,7 @@ from subprocess import call
 
 from bpf import attach_filter
 
-RADIOTAP_HEADER = b'\x00\x00\x0c\x00\x04\x80\x00\x00\x22\x00\x18\x00'
+RADIOTAP_HEADER = b'\x00\x00\x0c\x00\x04\x80\x00\x00\x0c\x00\x18\x00'
 DB_FRAME_VERSION = b'\x01'
 TO_DRONE = b'\x01'
 TO_GROUND = b'\x02'
