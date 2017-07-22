@@ -82,7 +82,7 @@ class DBProtocol:
         else:
             readable, writable, exceptional = select.select([self.comm_sock], [], [], 0)
             if readable:
-                bytearray(self.comm_sock.recv(MONITOR_BUFFERSIZE)).hex()
+                # bytearray(self.comm_sock.recv(MONITOR_BUFFERSIZE)).hex()
                 data = self._pars_packet(bytearray(self.comm_sock.recv(MONITOR_BUFFERSIZE)))
                 # TODO execute request from groundstation (GoPro settings/WBC settings/DroneBridge settings)
 
@@ -128,7 +128,11 @@ class DBProtocol:
         while True:
             r, w, e = select.select([], [self.android_sock], [], 0)
             if w:
-                return self.android_sock.sendto(raw_data, (self.ip_smartp, LTM_PORT_SMARTPHONE))
+                try:
+                    return self.android_sock.sendto(raw_data, (self.ip_smartp, LTM_PORT_SMARTPHONE))
+                except:
+                    print("Could not send to smartphone. Make sure it is connected and has USB tethering enabled.")
+                    return 0
 
     def sendto_groundstation(self, data_bytes, port_bytes):
         """Call this function to send stuff to the groundstation or directly to smartphone"""
