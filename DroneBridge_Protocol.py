@@ -19,7 +19,7 @@ ETH_TYPE = b"\x88\xAB"
 DB_80211_HEADER_LENGTH = 24
 UDP_BUFFERSIZE = 512
 MONITOR_BUFFERSIZE = 128
-LTM_PORT_SMARTPHONE = 5001
+LTM_PORT_SMARTPHONE = 1604
 
 
 class DBProtocol:
@@ -27,9 +27,10 @@ class DBProtocol:
 
 
     def __init__(self, src_mac, dst_mac, udp_port_rx, ip_rx, udp_port_smartphone, comm_direction, interface_drone_comm,
-                 mode):
+                 mode, communication_id):
         self.src_mac = src_mac
         self.dst_mac = dst_mac
+        self.comm_id = communication_id
         self.udp_port_rx = udp_port_rx  # 1604
         self.ip_rx = ip_rx
         self.udp_port_smartphone = udp_port_smartphone
@@ -169,12 +170,13 @@ class DBProtocol:
         rth_length = packet[2]
         # print("Packet with radiotapheader length: "+str(rth_length))
         if self._frameis_ok(packet, rth_length):
-            # TODO: always get correct bytes independent of used wireless driver. This one is for Atheros (TPLink)
-            if self.comm_direction == TO_DRONE:
-                self.signal_ground = packet[14]
+            # TODO: always get correct bytes independent of used wireless driver.
+            # TODO: use wifibroadcast shared memory to get signal strength
+            if self.comm_direction == TO_DRONE: # check if we are groundstation or drone
+                self.signal_ground = packet[14] # This one is for Zioncom
                 self.datarate = packet[9]
             else:
-                self.signal_drone = packet[30]
+                self.signal_drone = packet[30] # This one is for Atheros (TPLink)
             return packet[(rth_length + DB_80211_HEADER_LENGTH):len(packet)]
         else:
             return False
@@ -259,7 +261,7 @@ class DBProtocol:
         crc = crc8.crc8()
         crc.update(crc_content)
         ieee_min_header_mod = bytes(
-            bytearray(b'\x08\x00\x00\x00' + self.dst_mac + self.src_mac + crc_content + crc.digest() + b'\x10\x86'))
+            bytearray(b'\x08\x00\x00\x00' + self.comm_id + self.src_mac + crc_content + crc.digest() + b'\x10\x86'))
         while True:
             r, w, e = select.select([], [self.comm_sock], [], 0)
             if w:
@@ -291,9 +293,9 @@ class DBProtocol:
         raw_socket.bind((self.interface, 0))
         if self.comm_direction == TO_GROUND:
             raw_socket.setblocking(False)
-            raw_socket = attach_filter(raw_socket, TO_DRONE, self.src_mac)
+            raw_socket = attach_filter(raw_socket, TO_DRONE, self.comm_id) # TODO: beta of new protocol version
         else:
-            raw_socket = attach_filter(raw_socket, TO_GROUND, self.src_mac)
+            raw_socket = attach_filter(raw_socket, TO_GROUND, self.comm_id) # TODO: beta of new protocol version
         return raw_socket
 
     def _open_android_udpsocket(self):

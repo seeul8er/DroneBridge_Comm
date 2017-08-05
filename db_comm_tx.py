@@ -9,9 +9,13 @@ UDP_Port_SMARTPHONE_SIDE = 1604  # Port of smartphone app
 IP_ANDROID = '127.0.0.1'  # IP address of the android phone (not important, gets overridden)
 UDP_buffersize = 512  # bytes
 interface_drone_comm = "wlx000ee8dcaa2c"
-src = b'\x00\x0E\xE8\xDC\xAA\x2C'   # MAC address of TX-Pi (zioncom)
+#src = b'\x00\x0E\xE8\xDC\xAA\x2C'   # MAC address of TX-Pi (zioncom) - mac of local interface (groundstation)
+src = b'\x24\x05\x0f\x73\xb5\x74' # MAC address of TX-Pi (CSL) - mac of local interface (groundstation)
 # - dest_mac first byte must be 0x01 !!! -
-dst = b'\x01\xa6\xF7\x16\xA5\x11'   # MAC address of RX-Pi (TP-Link)
+dst = b'\x01\xa6\xF7\x16\xA5\x11'   # MAC address of RX-Pi (TP-Link) - mac of drone
+comm_id = b'\x01\xa6\xF7\x16\xA5\x11' # has to start with 0x01
+# TODO: at the moment comm_id must be same as dest for compatibility reasons of v1 and v2 of raw protocol. Otherwise no MSP command can be sent
+#cat /sys/class/net/wlx000ee8dcaa2c/address
 
 
 def parsearguments():
@@ -48,7 +52,7 @@ def main():
     UDP_Port_RX = parsedargs.udp_port_rx
     UDP_PORT_ANDROID = parsedargs.udp_port_android
 
-    dbprotocol = DBProtocol(src, dst, UDP_Port_RX, IP_RX, UDP_PORT_ANDROID, b'\x01', interface_drone_comm, mode)
+    dbprotocol = DBProtocol(src, dst, UDP_Port_RX, IP_RX, UDP_PORT_ANDROID, b'\x01', interface_drone_comm, mode, comm_id)
     if mode == 'wifi':
         dbprotocol.updateRouting()
 

@@ -17,8 +17,11 @@ sizeGPS = 15
 sizeAtt = 7
 sizeStatus = 8
 # - dest_mac first byte must be 0x01 !!! -
-dst = b'\x01\x0E\xE8\xDC\xAA\x2C'   # MAC address of TX-Pi (zioncom)
-src = b'\x18\xa6\xF7\x16\xA5\x11'   # MAC address of RX-Pi (TP-Link)
+#dst = b'\x01\x0E\xE8\xDC\xAA\x2C'   # MAC address of TX-Pi (zioncom) - MAC of groundstation
+dst = b'\x01\x05\x0f\x73\xb5\x74'   # MAC address of TX-Pi (CSL) - MAC of groundstation
+src = b'\x18\xa6\xF7\x16\xA5\x11'   # MAC address of RX-Pi (TP-Link) - MAC of local interface (drone)
+comm_id = b'\x01\xa6\xF7\x16\xA5\x11' # has to start with 0x01
+#cat /sys/class/net/wlx000ee8dcaa2c/address
 
 def openTXUDP_Socket():
     print("Opening UDP-Socket towards TX-Pi - listening on port " + str(UDP_Port_TX))
@@ -96,7 +99,7 @@ def main():
         istelemetryenabled = True
     mode = parsedArgs.mode
     DB_INTERFACE = parsedArgs.DB_INTERFACE
-    dbprotocol = DBProtocol(src, dst, UDP_Port_TX, IP_TX, 0, b'\x02', DB_INTERFACE, mode)
+    dbprotocol = DBProtocol(src, dst, UDP_Port_TX, IP_TX, 0, b'\x02', DB_INTERFACE, mode, comm_id)
     changed = False
 
     if istelemetryenabled:
