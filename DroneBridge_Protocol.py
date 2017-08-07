@@ -9,7 +9,7 @@ from subprocess import call
 
 from bpf import attach_filter
 
-RADIOTAP_HEADER = b'\x00\x00\x0c\x00\x04\x80\x00\x00\x0c\x00\x18\x00'
+RADIOTAP_HEADER = b'\x00\x00\x0c\x00\x04\x80\x00\x00\x0c\x00\x18\x00' # 6Mbit transmission speed set with Ralink chips
 DB_FRAME_VERSION = b'\x01'
 TO_DRONE = b'\x01'
 TO_GROUND = b'\x02'
@@ -27,10 +27,10 @@ class DBProtocol:
 
 
     def __init__(self, src_mac, dst_mac, udp_port_rx, ip_rx, udp_port_smartphone, comm_direction, interface_drone_comm,
-                 mode, communication_id):
+                 mode, communication_id, frame_type):
         self.src_mac = src_mac
-        self.dst_mac = dst_mac
-        self.comm_id = communication_id
+        self.dst_mac = dst_mac # not used in monitor mode
+        self.comm_id = communication_id # must be the same on drone and groundstation
         self.udp_port_rx = udp_port_rx  # 1604
         self.ip_rx = ip_rx
         self.udp_port_smartphone = udp_port_smartphone
@@ -43,6 +43,10 @@ class DBProtocol:
         else:
             self.short_mode = 'm'
         self.comm_sock = self._open_comm_sock()
+        if frame_type == 'd':
+            self.fcf = b'\x08\xbf'
+        else:
+            self.fcf = b'\x80\x00'
         if self.comm_direction == TO_DRONE:
             self.android_sock = self._open_android_udpsocket()
         self.changed = False
@@ -261,7 +265,7 @@ class DBProtocol:
         crc = crc8.crc8()
         crc.update(crc_content)
         ieee_min_header_mod = bytes(
-            bytearray(b'\x08\x00\x00\x00' + self.comm_id + self.src_mac + crc_content + crc.digest() + b'\x10\x86'))
+            bytearray(self.fcf+b'\x00\x00' + self.comm_id + self.src_mac + crc_content + crc.digest() + b'\x00\x00'))
         while True:
             r, w, e = select.select([], [self.comm_sock], [], 0)
             if w:

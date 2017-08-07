@@ -35,7 +35,8 @@ def attach_filter(sock, direction, dst_mac):
         [0x02, 0, 0, 0000000000],
         [0x07, 0, 0, 0000000000],
         [0x50, 0, 0, 0000000000],
-        [0x45, 0, 9, 0x00000008],
+        [0x45, 1, 0, 0x00000008], # allow data frames
+        [0x45, 0, 9, 0x00000080], # allow beacon frames
         [0x40, 0, 0, 0x00000006],
         [0x15, 0, 7, dest_mac2], # dest_mac of packet should be mac of local interface
         [0x48, 0, 0, 0x00000004],
