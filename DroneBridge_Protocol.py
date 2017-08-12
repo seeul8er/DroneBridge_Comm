@@ -34,7 +34,7 @@ class DBProtocol:
         self.comm_id = communication_id  # must be the same on drone and groundstation
         self.udp_port_rx = udp_port_rx  # 1604
         self.ip_rx = ip_rx
-        self.udp_port_smartphone = udp_port_smartphone
+        self.udp_port_smartphone = udp_port_smartphone  # we bind to that locally
         # communication direction: the direction the packets will have when sent from the application
         self.comm_direction = comm_direction  # set to 0x01 if program runs on groundst. and to 0x02 if runs on drone
         self.interface = interface_drone_comm  # the long range interface

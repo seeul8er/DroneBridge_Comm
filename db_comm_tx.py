@@ -33,7 +33,7 @@ def parsearguments():
                              ' default: 1604)', type=int, default=1604)
     parser.add_argument('-r', action='store', dest='ip_rx', help='IP address of RX (drone) (default: 192.168.3.1)',
                         default='192.168.3.1')
-    parser.add_argument('-a', action='store', dest='udp_port_android',
+    parser.add_argument('-u', action='store', dest='udp_port_android',
                         help='Port we listen on for incoming packets from '
                              'smartphone (default: 1605)',
                         default=1605, type=int)
@@ -41,8 +41,8 @@ def parsearguments():
                         help='Set the mode in which communication should happen. Use [wifi|monitor]',
                         default='monitor')
     parser.add_argument('-a', action='store', dest='frame_type',
-                        help='Specify frame type. Use <d> for Ralink chips (data frame) and <b> for Atheros chips '
-                             '(beacon frame). No CTS supported. Options [d|b]', default='d')
+                        help='Specify frame type. Use <1> for Ralink chips (data frame) and <2> for Atheros chips '
+                             '(beacon frame). No CTS supported. Options [1|2]', default='d')
     parser.add_argument('-c', action='store', dest='comm_id',
                         help='Communication ID must be the same on drone and groundstation. 8 characters long. Allowed '
                              'chars are (0123456789abcdef) Example: "aabb0011"', default='aabbccdd')

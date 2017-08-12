@@ -33,16 +33,12 @@ def parsearguments():
                              ' default: 1604)', type=int, default=1604)
     parser.add_argument('-r', action='store', dest='ip_rx', help='IP address of RX (drone) (default: 192.168.3.1)',
                         default='192.168.3.1')
-    parser.add_argument('-a', action='store', dest='udp_port_android',
-                        help='Port we listen on for incoming packets from '
-                             'smartphone (default: 1605)',
-                        default=1605, type=int)
     parser.add_argument('-m', action='store', dest='mode',
                         help='Set the mode in which communication should happen. Use [wifi|monitor]',
                         default='monitor')
     parser.add_argument('-a', action='store', dest='frame_type',
-                        help='Specify frame type. Use <d> for Ralink chips (data frame) and <b> for Atheros chips '
-                             '(beacon frame). No CTS supported. Options [d|b]', default='d')
+                        help='Specify frame type. Use <1> for Ralink chips (data frame) and <2> for Atheros chips '
+                             '(beacon frame). No CTS supported. Options [1|2]', default='d')
     parser.add_argument('-c', action='store', dest='comm_id',
                         help='Communication ID must be the same on drone and groundstation. 8 characters long. Allowed '
                              'chars are (0123456789abcdef) Example: "aabb0011"', default='aabbccdd')
@@ -50,13 +46,12 @@ def parsearguments():
 
 
 def main():
-    global interface_drone_comm, IP_RX, UDP_Port_RX, UDP_PORT_ANDROID
+    global interface_drone_comm, IP_RX, UDP_Port_RX
     parsedArgs = parsearguments()
     interface_drone_comm = parsedArgs.interface_drone_comm
     mode = parsedArgs.mode
     IP_RX = parsedArgs.ip_rx
     UDP_Port_RX = parsedArgs.udp_port_rx
-    UDP_PORT_ANDROID = parsedArgs.udp_port_android
     frame_type = parsedArgs.frame_type
 
     src = find_mac(interface_drone_comm)
@@ -65,7 +60,7 @@ def main():
     # print("DB_TX_TEL: Communication ID: " + comm_id.hex()) # only works in python 3.5
     print("DB_TX_TEL: Communication ID: " + str(comm_id))
 
-    dbprotocol = DBProtocol(src, dst, UDP_Port_RX, IP_RX, UDP_PORT_ANDROID, b'\x01', interface_drone_comm, mode,
+    dbprotocol = DBProtocol(src, dst, UDP_Port_RX, IP_RX, 1606, b'\x01', interface_drone_comm, mode,
                             comm_id, frame_type, b'\x02')
 
     while True:
