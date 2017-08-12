@@ -111,30 +111,32 @@ def main():
     DB_INTERFACE = parsedArgs.DB_INTERFACE
     src = find_mac(DB_INTERFACE)
     comm_id = b'\x01\xa6\xF7\x16\xA5\x11'  # has to start with 0x01 - currently for compatibility reasons comm_id is RX wifi MAC
-    #comm_id = bytes(b'\x01'+b'\x02'+bytearray.fromhex(parsedArgs.comm_id)) # TODO enable feature
-    print("DB_RX_TEL: Communication ID: "+comm_id.hex())
-    dbprotocol = DBProtocol(src, dst, UDP_Port_TX, IP_TX, 0, b'\x02', DB_INTERFACE, mode, comm_id, frame_type)
-    changed = False
+    # comm_id = bytes(b'\x01'+b'\x02'+bytearray.fromhex(parsedArgs.comm_id)) # TODO enable feature
+    # print("DB_RX_TEL: Communication ID: " + comm_id.hex()) # only works in python 3.5
+    print("DB_RX_TEL: Communication ID: " + str(comm_id))
+    dbprotocol = DBProtocol(src, dst, UDP_Port_TX, IP_TX, 0, b'\x02', DB_INTERFACE, mode, comm_id, frame_type, b'\x02')
 
     if istelemetryenabled:
         tel_sock = openFCTel_Socket()
-    #setupVideo(mode)
 
     while True:
         # Test
-        #LTM_Frame = b'$TA\x00\x00\x01\x00\xf0\x00\xf1'
-        #dbprotocol.sendto_groundstation(LTM_Frame, b'\x02')
-        #time.sleep(1)
+        # LTM_Frame = b'$TA\x00\x00\x01\x00\xf0\x00\xf1'
+        # dbprotocol.sendto_groundstation(LTM_Frame, b'\x02')
+        # time.sleep(1)
         # Test end
         if istelemetryenabled:
-            if tel_sock.read() == b'$':
-                tel_sock.read() # next one is always a 'T' (do not care)
-                LTM_Frame = read_LTM_Frame(tel_sock.read(),tel_sock)
-                dbprotocol.sendto_groundstation(LTM_Frame, b'\x02')
-                # create DroneBridgeFrame and send
-                if LTM_Frame[2]==79:
-                    dbprotocol.send_dronebridge_frame()
-        dbprotocol.receive_process_datafromgroundstation()
+            try:
+                if tel_sock.read() == b'$':
+                    tel_sock.read()  # next one is always a 'T' (do not care)
+                    LTM_Frame = read_LTM_Frame(tel_sock.read(), tel_sock)
+                    dbprotocol.sendto_groundstation(LTM_Frame, b'\x02')
+                    # create DroneBridgeFrame and send
+                    if LTM_Frame[2] == 79:
+                        dbprotocol.send_dronebridge_frame()
+            except Exception as e:
+                print("DB_RX_TEL: Error reading and sending Telemetry! - "+str(e))
+        dbprotocol.receive_process_datafromgroundstation()  # to get the beacon frame and its RSSI values
         if not istelemetryenabled:
             # DroneBridge LTM Frame is triggered from LTM origin frame. If telemetry is "no" we need to change trigger
             dbprotocol.send_dronebridge_frame()

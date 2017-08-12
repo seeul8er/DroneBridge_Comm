@@ -20,9 +20,10 @@ class BpfInstruction(ctypes.Structure):
         ('k', ctypes.c_uint32)
     ]
 
-def attach_filter(sock, direction, dst_mac):
+def attach_filter(sock, direction, dst_mac, port):
     """dst_mac is the mac of local wifi interface (destination of packet) which is what we declared in src_mac"""
     # first byte of dst_mac must be 0x01, we overwrite it here to be sure
+    version_port = b'\x01'+port
     dest_mac2 = int.from_bytes(dst_mac[2:6], byteorder='big', signed=False)
     dest_mac1 = int.from_bytes(bytearray(b'\x01'+dst_mac[1:2]), byteorder='big', signed=False)
     print(dst_mac)
@@ -42,7 +43,7 @@ def attach_filter(sock, direction, dst_mac):
         [0x48, 0, 0, 0x00000004],
         [0x15, 0, 5, dest_mac1], # dest_mac of packet should be mac of local interface
         [0x48, 0, 0, 0x00000010],
-        [0x15, 0, 3, 0x00000102], # version = 0x01 port = 0x02
+        [0x15, 0, 3, int.from_bytes(version_port, byteorder='big', signed=False)], # e.g. version = 0x01 port = 0x02
         [0x50, 0, 0, 0x00000012],
         [0x15, 0, 1, int.from_bytes(direction, byteorder='big', signed=False)],
         [0x06, 0, 0, 0x00040000],

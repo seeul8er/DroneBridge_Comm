@@ -60,19 +60,16 @@ def main():
     frame_type = parsedArgs.frame_type
 
     src = find_mac(interface_drone_comm)
-    comm_id = b'\x01\xa6\xF7\x16\xA5\x11'  # has to start with 0x01
-    # comm_id = bytes(b'\x01'+b'\x01'+bytearray.fromhex(parsedArgs.comm_id)) # TODO enable feature
-    print("DB_TX_TEL: Communication ID: " + comm_id.hex())
+    comm_id = b'\x01\xa6\xF7\x16\xA5\x11'  # has to start with 0x01 # TODO: remove
+    # comm_id = bytes(b'\x01'+b'\x01'+bytearray.fromhex(parsedArgs.comm_id)) # TODO: enable feature
+    # print("DB_TX_TEL: Communication ID: " + comm_id.hex()) # only works in python 3.5
+    print("DB_TX_TEL: Communication ID: " + str(comm_id))
 
     dbprotocol = DBProtocol(src, dst, UDP_Port_RX, IP_RX, UDP_PORT_ANDROID, b'\x01', interface_drone_comm, mode,
-                            comm_id, frame_type)
-    if mode == 'wifi':
-        dbprotocol.updateRouting()
-
-    last_keepalive = 0
+                            comm_id, frame_type, b'\x02')
 
     while True:
-        received = dbprotocol.receive_datafromdrone()
+        received = dbprotocol.receive_telemetryfromdrone()
         #received= b'$TA\x00\x00\x01\x00\xf0\x00\xf1'
         #time.sleep(0.15)
         if received != False:
@@ -81,8 +78,7 @@ def main():
                 # send a beaconframe so drone telemetry can extract signal strength. MSP RSSI over AUX is also a option
                 # Then RSSI field in LTM would be set correctly. But RSSI would be in % which is worse compared to dbm
                 dbprotocol.send_beacon()
-            #print("DB_TX_TEL: Sent "+str(dbprotocol.sendto_smartphone(received))+" bytes to sp")
-            last_keepalive = dbprotocol.process_smartphonerequests(last_keepalive)
-
+            sent = dbprotocol.sendto_smartphone(received)
+            #print("DB_TX_TEL: Sent "+str(sent)+" bytes to sp")
 if __name__ == "__main__":
     main()

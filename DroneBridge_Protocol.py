@@ -9,12 +9,14 @@ from subprocess import call
 
 from bpf import attach_filter
 
-RADIOTAP_HEADER = b'\x00\x00\x0c\x00\x04\x80\x00\x00\x0c\x00\x18\x00' # 6Mbit transmission speed set with Ralink chips
+RADIOTAP_HEADER = b'\x00\x00\x0c\x00\x04\x80\x00\x00\x0c\x00\x18\x00'  # 6Mbit transmission speed set with Ralink chips
 DB_FRAME_VERSION = b'\x01'
 TO_DRONE = b'\x01'
 TO_GROUND = b'\x02'
 PORT_CONTROLLER = b'\x01'
 PORT_TELEMETRY = b'\x02'
+PORT_VIDEO = b'\x03'
+PORT_COMMUNICATION = b'\x04'
 ETH_TYPE = b"\x88\xAB"
 DB_80211_HEADER_LENGTH = 24
 UDP_BUFFERSIZE = 512
@@ -25,28 +27,28 @@ LTM_PORT_SMARTPHONE = 1604
 class DBProtocol:
     ip_smartp = "192.168.42.129"
 
-
     def __init__(self, src_mac, dst_mac, udp_port_rx, ip_rx, udp_port_smartphone, comm_direction, interface_drone_comm,
-                 mode, communication_id, frame_type):
+                 mode, communication_id, frame_type, dronebridge_port):
         self.src_mac = src_mac
-        self.dst_mac = dst_mac # not used in monitor mode
-        self.comm_id = communication_id # must be the same on drone and groundstation
+        self.dst_mac = dst_mac  # not used in monitor mode
+        self.comm_id = communication_id  # must be the same on drone and groundstation
         self.udp_port_rx = udp_port_rx  # 1604
         self.ip_rx = ip_rx
         self.udp_port_smartphone = udp_port_smartphone
         # communication direction: the direction the packets will have when sent from the application
-        self.comm_direction = comm_direction # set to 0x01 if program runs on groundst. and to 0x02 if runs on drone
+        self.comm_direction = comm_direction  # set to 0x01 if program runs on groundst. and to 0x02 if runs on drone
         self.interface = interface_drone_comm  # the long range interface
         self.mode = mode
         if self.mode == 'wifi':
             self.short_mode = 'w'
         else:
             self.short_mode = 'm'
-        self.comm_sock = self._open_comm_sock()
-        if frame_type == 'd':
+        if frame_type == '1':
             self.fcf = b'\x08\xbf'
         else:
             self.fcf = b'\x80\x00'
+        self.db_port = dronebridge_port
+        self.comm_sock = self._open_comm_sock()
         if self.comm_direction == TO_DRONE:
             self.android_sock = self._open_android_udpsocket()
         self.changed = False
@@ -54,6 +56,28 @@ class DBProtocol:
         self.signal_drone = 0  # signal quality that the drone measures [dBm]
 
     def receive_datafromdrone(self):
+        """Used by db_comm_protocol - want non-blocking socket in this case"""
+        if self.mode == 'wifi':
+            try:
+                data, addr = self.comm_sock.recvfrom(UDP_BUFFERSIZE)
+                return data
+            except Exception as e:
+                print(str(e) + ": Drone is not ready or has wrong IP address of groundstation. Sending hello-packet")
+                self._send_hello()
+                return False
+        else:
+            try:
+                readable, writable, exceptional = select.select([self.comm_sock], [], [], 0)
+                if readable:
+                    data = self._pars_packet(bytearray(self.comm_sock.recv(MONITOR_BUFFERSIZE)))
+                    if data != False:
+                        return data
+            except Exception as e:
+                print(str(e) + ": Error receiving data form drone (monitor mode)")
+                return False
+
+    def receive_telemetryfromdrone(self):
+        """Used by db_telemetry_tx - want blocking socket in this case"""
         if self.mode == 'wifi':
             try:
                 data, addr = self.comm_sock.recvfrom(UDP_BUFFERSIZE)
@@ -69,7 +93,7 @@ class DBProtocol:
                     if data != False:
                         return data
             except Exception as e:
-                print(str(e) + ": Error receiving data form drone (monitor mode)")
+                print(str(e) + ": Error receiving telemetry form drone (monitor mode)")
                 return False
 
     def receive_process_datafromgroundstation(self):
@@ -85,11 +109,15 @@ class DBProtocol:
                 else:
                     print("New data from groundstation: " + data.decode())
         else:
-            readable, writable, exceptional = select.select([self.comm_sock], [], [], 0)
-            if readable:
-                # bytearray(self.comm_sock.recv(MONITOR_BUFFERSIZE)).hex()
-                data = self._pars_packet(bytearray(self.comm_sock.recv(MONITOR_BUFFERSIZE)))
-                # TODO execute request from groundstation (GoPro settings/WBC settings/DroneBridge settings)
+            if self.db_port == PORT_TELEMETRY:
+                # socket is non-blocking - return if nothing there and keep sending telemetry
+                readable, writable, exceptional = select.select([self.comm_sock], [], [], 0)
+                if readable:
+                    # just get RSSI of radiotap header
+                    self._pars_packet(bytearray(self.comm_sock.recv(MONITOR_BUFFERSIZE)))
+            else:
+                db_comm_prot_request = self._pars_packet(bytearray(self.comm_sock.recv(MONITOR_BUFFERSIZE)))
+                return db_comm_prot_request
 
     def process_smartphonerequests(self, last_keepalive):
         """See if smartphone told the groundstation to do something. Returns recent keep-alive time"""
@@ -170,17 +198,16 @@ class DBProtocol:
         return self.comm_sock
 
     def _pars_packet(self, packet):
-        """Parses Packet and checks if it is for us. Returns False if not or packet payload if it is"""
+        """Check if packet is OK and get RSSI. Returns False if not OK or return packet payload if it is"""
         rth_length = packet[2]
-        # print("Packet with radiotapheader length: "+str(rth_length))
         if self._frameis_ok(packet, rth_length):
             # TODO: always get correct bytes independent of used wireless driver.
             # TODO: use wifibroadcast shared memory to get signal strength
-            if self.comm_direction == TO_DRONE: # check if we are groundstation or drone
-                self.signal_ground = packet[14] # This one is for Zioncom
+            if self.comm_direction == TO_DRONE:  # check if we are groundstation or drone
+                self.signal_ground = packet[14]  # This one is for Zioncom
                 self.datarate = packet[9]
             else:
-                self.signal_drone = packet[30] # This one is for Atheros (TPLink)
+                self.signal_drone = packet[30]  # This one is for Atheros (TPLink)
             return packet[(rth_length + DB_80211_HEADER_LENGTH):len(packet)]
         else:
             return False
@@ -193,23 +220,23 @@ class DBProtocol:
         print("Received from SP: " + raw_data)
         if raw_data == "smartphone_is_still_here":
             return time.time()
-        if not self._process_smartphone_dbprotocol(raw_data):
+        if not self._process_db_comm_protocol(raw_data):
             print("smartphone command could not be processed correctly")
         return thelast_keepalive
 
-    def _process_smartphone_dbprotocol(self, raw_data):
+    def _process_db_comm_protocol(self, raw_data):
         status = False
         raw_data_json = json.loads(raw_data)
         if raw_data_json['type'] == 0:
             print("A message for the local controller (RC data overwrite)")
             # TODO pass parameters over to local controller via FIFO-Pipe
         elif raw_data_json['type'] == 1:
-            print("A message for the drone flight controller")  # port 0
+            print("A message directly for the drone flight controller")  # create a MSP packet for DroneBridge Control Module
             status = self._sendto_drone(base64.b64decode(raw_data_json['MSP']), PORT_CONTROLLER)
-        elif raw_data_json['type'] == 2:  # port 1 or port 3 (not sure yet)
+        elif raw_data_json['type'] == 2:
             print("A message to change settings")
             # TODO change settings
-        elif raw_data_json['type'] == 3:  # port 1
+        elif raw_data_json['type'] == 3:
             print("A message to change GoPro-Settings")
             status = self._sendto_drone(raw_data, PORT_TELEMETRY)
         else:
@@ -265,7 +292,7 @@ class DBProtocol:
         crc = crc8.crc8()
         crc.update(crc_content)
         ieee_min_header_mod = bytes(
-            bytearray(self.fcf+b'\x00\x00' + self.comm_id + self.src_mac + crc_content + crc.digest() + b'\x00\x00'))
+            bytearray(self.fcf + b'\x00\x00' + self.comm_id + self.src_mac + crc_content + crc.digest() + b'\x00\x00'))
         while True:
             r, w, e = select.select([], [self.comm_sock], [], 0)
             if w:
@@ -295,12 +322,21 @@ class DBProtocol:
         print("Opening socket for monitor mode")
         raw_socket = socket(AF_PACKET, SOCK_RAW, htons(0x0004))
         raw_socket.bind((self.interface, 0))
+        raw_socket = self._set_comm_socket_behavior(raw_socket)
         if self.comm_direction == TO_GROUND:
-            raw_socket.setblocking(False)
-            raw_socket = attach_filter(raw_socket, TO_DRONE, self.comm_id) # TODO: beta of new protocol version
+            raw_socket = attach_filter(raw_socket, TO_DRONE, self.comm_id, self.db_port)  # filter for packets TO_DRONE
         else:
-            raw_socket = attach_filter(raw_socket, TO_GROUND, self.comm_id) # TODO: beta of new protocol version
+            raw_socket = attach_filter(raw_socket, TO_GROUND, self.comm_id, self.db_port)  # filter for packets TO_GROUND
         return raw_socket
+
+    def _set_comm_socket_behavior(self, socket):
+        """Set to blocking or non-blocking depending on Module (Telemetry, Communication) and if on drone or ground"""
+        adjusted_socket = socket
+        if self.comm_direction == TO_GROUND and self.db_port == PORT_TELEMETRY:  # On drone side in telemetry module
+            adjusted_socket.setblocking(False)
+        elif self.comm_direction == TO_DRONE and self.db_port == PORT_COMMUNICATION:  # On ground side in comm module
+            adjusted_socket.setblocking(False)
+        return adjusted_socket
 
     def _open_android_udpsocket(self):
         print("Opening UDP-Socket to smartphone")
