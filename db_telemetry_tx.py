@@ -68,7 +68,7 @@ def main():
         #received= b'$TA\x00\x00\x01\x00\xf0\x00\xf1'
         #time.sleep(0.15)
         if received != False:
-            if received[2] == 89:
+            if received[2] == 89:  # int("59", 16)
                 received = dbprotocol.finish_dronebridge_ltmframe(received)
                 # send a beaconframe so drone telemetry can extract signal strength. MSP RSSI over AUX is also a option
                 # Then RSSI field in LTM would be set correctly. But RSSI would be in % which is worse compared to dbm

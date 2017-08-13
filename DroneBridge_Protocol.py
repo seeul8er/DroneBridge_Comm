@@ -19,6 +19,8 @@ PORT_VIDEO = b'\x03'
 PORT_COMMUNICATION = b'\x04'
 ETH_TYPE = b"\x88\xAB"
 DB_80211_HEADER_LENGTH = 24
+DRIVER_ATHEROS = "atheros"
+DRIVER_RALINK = "ralink"
 UDP_BUFFERSIZE = 512
 MONITOR_BUFFERSIZE = 128
 LTM_PORT_SMARTPHONE = 1604
@@ -45,8 +47,10 @@ class DBProtocol:
             self.short_mode = 'm'
         if frame_type == '1':
             self.fcf = b'\x08\xbf'
+            self.driver = DRIVER_RALINK
         else:
             self.fcf = b'\x80\x00'
+            self.driver = DRIVER_ATHEROS
         self.db_port = dronebridge_port
         self.comm_sock = self._open_comm_sock()
         if self.comm_direction == TO_DRONE:
@@ -201,13 +205,12 @@ class DBProtocol:
         """Check if packet is OK and get RSSI. Returns False if not OK or return packet payload if it is"""
         rth_length = packet[2]
         if self._frameis_ok(packet, rth_length):
-            # TODO: always get correct bytes independent of used wireless driver.
             # TODO: use wifibroadcast shared memory to get signal strength
-            if self.comm_direction == TO_DRONE:  # check if we are groundstation or drone
-                self.signal_ground = packet[14]  # This one is for Zioncom
-                self.datarate = packet[9]
+            if self.driver == DRIVER_RALINK:
+                self.signal_ground = packet[14]
+                # self.datarate = packet[9]
             else:
-                self.signal_drone = packet[30]  # This one is for Atheros (TPLink)
+                self.signal_drone = packet[30]
             return packet[(rth_length + DB_80211_HEADER_LENGTH):len(packet)]
         else:
             return False

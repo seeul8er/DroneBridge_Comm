@@ -118,6 +118,7 @@ def main():
 
     if istelemetryenabled:
         tel_sock = openFCTel_Socket()
+    time.sleep(0.3)
 
     while True:
         # Test
@@ -126,21 +127,18 @@ def main():
         # time.sleep(1)
         # Test end
         if istelemetryenabled:
-            try:
-                if tel_sock.read() == b'$':
-                    tel_sock.read()  # next one is always a 'T' (do not care)
-                    LTM_Frame = read_LTM_Frame(tel_sock.read(), tel_sock)
-                    dbprotocol.sendto_groundstation(LTM_Frame, b'\x02')
-                    # create DroneBridgeFrame and send
-                    if LTM_Frame[2] == 79:
-                        dbprotocol.send_dronebridge_frame()
-            except Exception as e:
-                print("DB_RX_TEL: Error reading and sending Telemetry! - "+str(e))
+            if tel_sock.read() == b'$':
+                tel_sock.read()  # next one is always a 'T' (do not care)
+                LTM_Frame = read_LTM_Frame(tel_sock.read(), tel_sock)
+                dbprotocol.sendto_groundstation(LTM_Frame, b'\x02')
+                # create DroneBridgeFrame and send
+                if LTM_Frame[2] == 83:  # int("53", 16) --> 0x53 = S in UTF-8 --> sending frame after each status frame
+                    dbprotocol.send_dronebridge_frame()
         dbprotocol.receive_process_datafromgroundstation()  # to get the beacon frame and its RSSI values
         if not istelemetryenabled:
             # DroneBridge LTM Frame is triggered from LTM origin frame. If telemetry is "no" we need to change trigger
             dbprotocol.send_dronebridge_frame()
-            time.sleep(1)
+            time.sleep(0.2)
 
 
 if __name__ == "__main__":
