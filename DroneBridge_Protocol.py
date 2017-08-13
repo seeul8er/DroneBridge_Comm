@@ -56,8 +56,7 @@ class DBProtocol:
         if self.comm_direction == TO_DRONE:
             self.android_sock = self._open_android_udpsocket()
         self.changed = False
-        self.signal_ground = b'\x00'  # signal quality that the groundstation measures [dBm]
-        self.signal_drone = 0  # signal quality that the drone measures [dBm]
+        self.signal = 0  # signal quality that is measured [dBm]
 
     def receive_datafromdrone(self):
         """Used by db_comm_protocol - want non-blocking socket in this case"""
@@ -157,7 +156,7 @@ class DBProtocol:
             return frame
         else:
             # frame[5] = int((int(self.datarate)*500)/1000)
-            frame[6] = self.signal_ground
+            frame[6] = self.signal
             return bytes(frame)
 
     def sendto_smartphone(self, raw_data):
@@ -181,7 +180,7 @@ class DBProtocol:
 
     def send_dronebridge_frame(self):
         DroneBridgeFrame = b'$TY' + self.short_mode.encode() + chr(int(psutil.cpu_percent(interval=None))).encode() + \
-                           bytes([self.signal_drone]) + b'\x00\x00\x00\x00\x00\x00\x00'
+                           bytes([self.signal]) + b'\x00\x00\x00\x00\x00\x00\x00'
         self.sendto_groundstation(DroneBridgeFrame, PORT_TELEMETRY)
 
     def send_beacon(self):
@@ -207,10 +206,10 @@ class DBProtocol:
         if self._frameis_ok(packet, rth_length):
             # TODO: use wifibroadcast shared memory to get signal strength
             if self.driver == DRIVER_RALINK:
-                self.signal_ground = packet[14]
+                self.signal = packet[14]
                 # self.datarate = packet[9]
             else:
-                self.signal_drone = packet[30]
+                self.signal = packet[30]
             return packet[(rth_length + DB_80211_HEADER_LENGTH):len(packet)]
         else:
             return False
@@ -332,9 +331,9 @@ class DBProtocol:
             raw_socket = attach_filter(raw_socket, TO_GROUND, self.comm_id, self.db_port)  # filter for packets TO_GROUND
         return raw_socket
 
-    def _set_comm_socket_behavior(self, socket):
+    def _set_comm_socket_behavior(self, thesocket):
         """Set to blocking or non-blocking depending on Module (Telemetry, Communication) and if on drone or ground"""
-        adjusted_socket = socket
+        adjusted_socket = thesocket
         if self.comm_direction == TO_GROUND and self.db_port == PORT_TELEMETRY:  # On drone side in telemetry module
             adjusted_socket.setblocking(False)
         elif self.comm_direction == TO_DRONE and self.db_port == PORT_COMMUNICATION:  # On ground side in comm module
