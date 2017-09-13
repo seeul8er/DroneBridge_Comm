@@ -1,9 +1,7 @@
-import socket
 import argparse
 from subprocess import Popen
 from DroneBridge_Protocol import DBProtocol
 from db_comm_helper import find_mac
-import time
 
 # Default values, may get overridden by command line arguments
 
@@ -11,12 +9,6 @@ UDP_Port_TX = 1604  # Port for communication with TX (Groundstation)
 IP_TX = "192.168.3.2"   # Target IP address (IP address of the Groundstation - not important and gets overridden anyways)
 UDP_buffersize = 512  # bytes
 AB_INTERFACE = "wlan1"
-
-# - dest_mac first byte must be 0x01 !!! -
-#dst = b'\x01\x0E\xE8\xDC\xAA\x2C'   # MAC address of TX-Pi (zioncom) - MAC of groundstation
-#dst = b'\x01\x05\x0f\x73\xb5\x74'   # MAC address of TX-Pi (CSL) - MAC of groundstation
-#src = b'\x18\xa6\xF7\x16\xA5\x11'   # MAC address of RX-Pi (TP-Link) - MAC of local interface (drone)
-#comm_id = src # has to start with 0x01
 dst = b''
 
 def getGoPro_Status_JSON():
@@ -60,11 +52,10 @@ def main():
     frame_type = parsedArgs.frame_type
     DB_INTERFACE = parsedArgs.DB_INTERFACE
     src = find_mac(DB_INTERFACE)
-    comm_id = b'\x01\xa6\xF7\x16\xA5\x11'  # has to start with 0x01 - currently for compatibility reasons comm_id is RX wifi MAC
-    #comm_id = bytes(b'\x01'+b'\x02'+bytearray.fromhex(parsedArgs.comm_id)) # TODO enable feature
+    extended_comm_id = bytes(b'\x01'+b'\x02'+bytearray.fromhex(parsedArgs.comm_id)) # <odd><direction><comm_id>
     # print("DB_TX_Comm: Communication ID: " + comm_id.hex()) # only works in python 3.5+
-    print("DB_RX_Comm: Communication ID: " + str(comm_id))
-    dbprotocol = DBProtocol(src, dst, UDP_Port_TX, IP_TX, 0, b'\x02', DB_INTERFACE, mode, comm_id, frame_type, b'\x04')
+    print("DB_RX_Comm: Communication ID: " + str(extended_comm_id))
+    dbprotocol = DBProtocol(src, dst, UDP_Port_TX, IP_TX, 0, b'\x02', DB_INTERFACE, mode, extended_comm_id, frame_type, b'\x04')
 
     #setupVideo(mode)
 
