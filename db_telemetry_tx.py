@@ -10,9 +10,6 @@ IP_RX = '192.168.3.1'  # Target IP address (IP address of the Pi on the Drone: n
 UDP_PORT_ANDROID = 1605  # Port for communication with smartphone (port on groundstation side)
 UDP_buffersize = 512  # bytes
 interface_drone_comm = "000ee8dcaa2c"
-#src = b'\x00\x0E\xE8\xDC\xAA\x2C'   # MAC address of TX-Pi (zioncom) - mac of local interface (groundstation)
-#src = b'\x24\x05\x0f\x73\xb5\x74' # MAC address of TX-Pi (CSL) - mac of local interface (groundstation)
-# - dest_mac first byte must be 0x01 !!! -
 dst = b''   # MAC address of RX-Pi (TP-Link) - mac of drone
 # TODO: at the moment comm_id must be same as dest for compatibility reasons of v1 and v2 of raw protocol. Otherwise no MSP command can be sent
 #cat /sys/class/net/wlx000ee8dcaa2c/address
@@ -38,7 +35,7 @@ def parsearguments():
                         default='monitor')
     parser.add_argument('-a', action='store', dest='frame_type',
                         help='Specify frame type. Use <1> for Ralink chips (data frame) and <2> for Atheros chips '
-                             '(beacon frame). No CTS supported. Options [1|2]', default='d')
+                             '(beacon frame). No CTS supported. Options [1|2]', default='1')
     parser.add_argument('-c', action='store', dest='comm_id',
                         help='Communication ID must be the same on drone and groundstation. 8 characters long. Allowed '
                              'chars are (0123456789abcdef) Example: "aabb0011"', default='aabbccdd')
@@ -55,8 +52,7 @@ def main():
     frame_type = parsedArgs.frame_type
 
     src = find_mac(interface_drone_comm)
-    comm_id = b'\x01\xa6\xF7\x16\xA5\x11'  # has to start with 0x01 # TODO: remove
-    # comm_id = bytes(b'\x01'+b'\x01'+bytearray.fromhex(parsedArgs.comm_id)) # TODO: enable feature
+    comm_id = bytes(b'\x01'+b'\x01'+bytearray.fromhex(parsedArgs.comm_id))
     # print("DB_TX_TEL: Communication ID: " + comm_id.hex()) # only works in python 3.5
     print("DB_TX_TEL: Communication ID: " + str(comm_id))
 
