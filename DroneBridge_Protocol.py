@@ -8,6 +8,7 @@ import psutil
 from subprocess import call
 
 from bpf import attach_filter
+from db_comm_messages import change_settings, new_settingsresponse_message
 
 RADIOTAP_HEADER = b'\x00\x00\x0c\x00\x04\x80\x00\x00\x0c\x00\x18\x00'  # 6Mbit transmission speed set with Ralink chips
 DB_FRAME_VERSION = b'\x01'
@@ -23,11 +24,12 @@ DRIVER_ATHEROS = "atheros"
 DRIVER_RALINK = "ralink"
 UDP_BUFFERSIZE = 512
 MONITOR_BUFFERSIZE = 128
-LTM_PORT_SMARTPHONE = 1604
 
 
 class DBProtocol:
     ip_smartp = "192.168.42.129"
+    LTM_PORT_SMARTPHONE = 1604
+    COMM_PORT_SMARTPHONE = 1603
 
     def __init__(self, src_mac, dst_mac, udp_port_rx, ip_rx, udp_port_smartphone, comm_direction, interface_drone_comm,
                  mode, communication_id, frame_type, dronebridge_port):
@@ -57,6 +59,10 @@ class DBProtocol:
             self.android_sock = self._open_android_udpsocket()
         self.changed = False
         self.signal = 0  # signal quality that is measured [dBm]
+        if comm_direction == TO_DRONE:
+            pass
+        elif comm_direction == TO_GROUND:
+            pass
 
     def receive_datafromdrone(self):
         """Used by db_comm_protocol - want non-blocking socket in this case"""
@@ -159,13 +165,13 @@ class DBProtocol:
             frame[6] = self.signal
             return bytes(frame)
 
-    def sendto_smartphone(self, raw_data):
+    def sendto_smartphone(self, raw_data, port):
         """Sends data to smartphone. Socket is nonblocking so we need to wait till it becomes"""
         while True:
             r, w, e = select.select([], [self.android_sock], [], 0)
             if w:
                 try:
-                    return self.android_sock.sendto(raw_data, (self.ip_smartp, LTM_PORT_SMARTPHONE))
+                    return self.android_sock.sendto(raw_data, (self.ip_smartp, port))
                 except:
                     print("Could not send to smartphone. Make sure it is connected and has USB tethering enabled.")
                     return 0
@@ -204,7 +210,6 @@ class DBProtocol:
         """Check if packet is OK and get RSSI. Returns False if not OK or return packet payload if it is"""
         rth_length = packet[2]
         if self._frameis_ok(packet, rth_length):
-            # TODO: use wifibroadcast shared memory to get signal strength
             if self.driver == DRIVER_RALINK:
                 self.signal = packet[14]
                 # self.datarate = packet[9]
@@ -230,20 +235,59 @@ class DBProtocol:
         status = False
         raw_data_json = json.loads(raw_data)
         if raw_data_json['type'] == 0:
-            print("A message for the local controller (RC data overwrite)")
-            # TODO pass parameters over to local controller via FIFO-Pipe
+            pass
         elif raw_data_json['type'] == 1:
             print("A message directly for the drone flight controller")  # create a MSP packet for DroneBridge Control Module
             status = self._sendto_drone(base64.b64decode(raw_data_json['MSP']), PORT_CONTROLLER)
-        elif raw_data_json['type'] == 2:
-            print("A message to change settings")
-            # TODO change settings
-        elif raw_data_json['type'] == 3:
-            print("A message to change GoPro-Settings")
-            status = self._sendto_drone(raw_data, PORT_TELEMETRY)
         else:
             print("unknown command from smartphone")
         return status
+
+    def _route_db_comm_protocol(self, raw_json):
+        status = False
+        loaded_json = json.loads(raw_json)
+
+        if loaded_json['destination'] == 1 and self.comm_direction == TO_DRONE:
+            message = self._process_db_comm_protocol_type(loaded_json)
+            if message != "":
+                self.sendto_smartphone(message, self.COMM_PORT_SMARTPHONE)
+        elif loaded_json['destination'] == 2:
+            message = self._process_db_comm_protocol_type(loaded_json)
+            if self.comm_direction == TO_DRONE:
+                self.sendto_smartphone(message, self.COMM_PORT_SMARTPHONE)
+                self._sendto_drone(raw_json, PORT_COMMUNICATION)
+            else:
+                self.sendto_groundstation(raw_json, PORT_COMMUNICATION)
+        elif loaded_json['destination'] == 3:
+            if self.comm_direction == TO_DRONE:
+                self._sendto_drone(raw_json, PORT_COMMUNICATION)
+            else:
+                # TODO: process GoPro command
+                pass
+        elif loaded_json['destination'] == 4:
+            if self.comm_direction == TO_DRONE:
+                self.sendto_smartphone(raw_json, self.COMM_PORT_SMARTPHONE)
+        else:
+            print("DB_COMM_PROTO: Unknown message destination")
+        return status
+
+    def _process_db_comm_protocol_type(self, loaded_json):
+        message = ""
+        if loaded_json['type'] == 'mspcommand':
+            self._sendto_drone(base64.b64decode(loaded_json['MSP']), PORT_CONTROLLER)
+        elif loaded_json['type'] == 'settingsrequest':
+            if self.comm_direction == TO_DRONE:
+                message = new_settingsresponse_message(loaded_json, 'groundstation')
+            else:
+                message = new_settingsresponse_message(loaded_json, 'drone')
+        elif loaded_json['type'] == 'settingschange':
+            if self.comm_direction == TO_DRONE:
+                message = change_settings(loaded_json, 'groundstation')
+            else:
+                message = change_settings(loaded_json, 'drone')
+        else:
+            print("DB_COMM_PROTO: Unknown message type")
+        return message
 
     def _send_hello(self):
         """Send this in wifi mode to let the drone know about IP of groundstation"""

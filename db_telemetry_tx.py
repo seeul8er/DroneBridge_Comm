@@ -69,7 +69,7 @@ def main():
                 # send a beaconframe so drone telemetry can extract signal strength. MSP RSSI over AUX is also a option
                 # Then RSSI field in LTM would be set correctly. But RSSI would be in % which is worse compared to dbm
                 dbprotocol.send_beacon()
-            sent = dbprotocol.sendto_smartphone(received)
+            sent = dbprotocol.sendto_smartphone(received, dbprotocol.LTM_PORT_SMARTPHONE)
             #print("DB_TX_TEL: Sent "+str(sent)+" bytes to sp")
 if __name__ == "__main__":
     main()
