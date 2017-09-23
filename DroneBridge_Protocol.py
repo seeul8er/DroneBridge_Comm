@@ -8,7 +8,9 @@ import psutil
 from subprocess import call
 
 from bpf import attach_filter
-from db_comm_messages import change_settings, new_settingsresponse_message
+from db_comm_messages import change_settings, new_settingsresponse_message, comm_message_extract_info, \
+    check_package_good
+from db_ip_checker import DB_IP_GETTER
 
 RADIOTAP_HEADER = b'\x00\x00\x0c\x00\x04\x80\x00\x00\x0c\x00\x18\x00'  # 6Mbit transmission speed set with Ralink chips
 DB_FRAME_VERSION = b'\x01'
@@ -59,10 +61,12 @@ class DBProtocol:
             self.android_sock = self._open_android_udpsocket()
         self.changed = False
         self.signal = 0  # signal quality that is measured [dBm]
-        if comm_direction == TO_DRONE:
-            pass
-        elif comm_direction == TO_GROUND:
-            pass
+        self.ipgetter = DB_IP_GETTER()
+        self.tag = ''
+        if dronebridge_port == PORT_TELEMETRY:
+            self.tag = "DB_TEL: "
+        elif dronebridge_port == PORT_COMMUNICATION:
+            self.tag = "DB_Comm: "
 
     def receive_datafromdrone(self):
         """Used by db_comm_protocol - want non-blocking socket in this case"""
@@ -71,7 +75,7 @@ class DBProtocol:
                 data, addr = self.comm_sock.recvfrom(UDP_BUFFERSIZE)
                 return data
             except Exception as e:
-                print(str(e) + ": Drone is not ready or has wrong IP address of groundstation. Sending hello-packet")
+                print(self.tag + str(e) + ": Drone is not ready or has wrong IP address of groundstation. Sending hello-packet")
                 self._send_hello()
                 return False
         else:
@@ -82,7 +86,7 @@ class DBProtocol:
                     if data != False:
                         return data
             except Exception as e:
-                print(str(e) + ": Error receiving data form drone (monitor mode)")
+                print(self.tag + str(e) + ": Error receiving data form drone (monitor mode)")
                 return False
 
     def receive_telemetryfromdrone(self):
@@ -92,7 +96,7 @@ class DBProtocol:
                 data, addr = self.comm_sock.recvfrom(UDP_BUFFERSIZE)
                 return data
             except Exception as e:
-                print(str(e) + ": Drone is not ready or has wrong IP address of groundstation. Sending hello-packet")
+                print(self.tag + str(e) + ": Drone is not ready or has wrong IP address of groundstation. Sending hello-packet")
                 self._send_hello()
                 return False
         else:
@@ -102,7 +106,7 @@ class DBProtocol:
                     if data != False:
                         return data
             except Exception as e:
-                print(str(e) + ": Error receiving telemetry form drone (monitor mode)")
+                print(self.tag + str(e) + ": Error receiving telemetry form drone (monitor mode)")
                 return False
 
     def receive_process_datafromgroundstation(self):
@@ -114,9 +118,9 @@ class DBProtocol:
                 if data.decode() == "tx_hello_packet":
                     self.ip_rx = addr[0]
                     self.updateRouting()
-                    print("Updated goundstation IP-address to: " + str(self.ip_rx))
+                    print(self.tag + "Updated goundstation IP-address to: " + str(self.ip_rx))
                 else:
-                    print("New data from groundstation: " + data.decode())
+                    print(self.tag + "New data from groundstation: " + data.decode())
         else:
             if self.db_port == PORT_TELEMETRY:
                 # socket is non-blocking - return if nothing there and keep sending telemetry
@@ -142,9 +146,9 @@ class DBProtocol:
         if sock_status[0]:
             new_data, new_addr = self.android_sock.recvfrom(UDP_BUFFERSIZE)
             if new_data.decode() == "smartphone_is_still_here":
-                print("Smartphone is ready")
+                print(self.tag + "Smartphone is ready")
                 self.ip_smartp = new_addr[0]
-                print("Sending future data to smartphone - " + self.ip_smartp + ":" + str(self.udp_port_smartphone))
+                print(self.tag + "(IGNORED) Sending future data to smartphone - " + self.ip_smartp + ":" + str(self.udp_port_smartphone))
                 return True
         return False
 
@@ -167,13 +171,14 @@ class DBProtocol:
 
     def sendto_smartphone(self, raw_data, port):
         """Sends data to smartphone. Socket is nonblocking so we need to wait till it becomes"""
+        self.ip_smartp = self.ipgetter.return_smartphone_ip()
         while True:
             r, w, e = select.select([], [self.android_sock], [], 0)
             if w:
                 try:
                     return self.android_sock.sendto(raw_data, (self.ip_smartp, port))
                 except:
-                    print("Could not send to smartphone. Make sure it is connected and has USB tethering enabled.")
+                    print(self.tag + "Could not send to smartphone. Make sure it is connected and has USB tethering enabled.")
                     return 0
 
     def sendto_groundstation(self, data_bytes, port_bytes):
@@ -193,7 +198,7 @@ class DBProtocol:
         self._sendto_drone('groundstation_beacon'.encode(), PORT_TELEMETRY)
 
     def updateRouting(self):
-        print("Update iptables to send GoPro stream to " + str(self.ip_rx))
+        print(self.tag + "Update iptables to send GoPro stream to " + str(self.ip_rx))
         if self.changed:
             call("iptables -t nat -R PREROUTING 1 -p udp --dport 8554 -j DNAT --to " + str(self.ip_rx))
         else:
@@ -227,48 +232,37 @@ class DBProtocol:
         print("Received from SP: " + raw_data)
         if raw_data == "smartphone_is_still_here":
             return time.time()
-        if not self._process_db_comm_protocol(raw_data):
-            print("smartphone command could not be processed correctly")
+        if not self._route_db_comm_protocol(raw_data):
+            print(self.tag + "smartphone command could not be processed correctly")
         return thelast_keepalive
 
-    def _process_db_comm_protocol(self, raw_data):
+    def _route_db_comm_protocol(self, raw_data):
         status = False
-        raw_data_json = json.loads(raw_data)
-        if raw_data_json['type'] == 0:
-            pass
-        elif raw_data_json['type'] == 1:
-            print("A message directly for the drone flight controller")  # create a MSP packet for DroneBridge Control Module
-            status = self._sendto_drone(base64.b64decode(raw_data_json['MSP']), PORT_CONTROLLER)
-        else:
-            print("unknown command from smartphone")
-        return status
+        extracted_info = comm_message_extract_info(raw_data) # returns json and crc string
+        loaded_json = json.loads(extracted_info[0])
 
-    def _route_db_comm_protocol(self, raw_json):
-        status = False
-        loaded_json = json.loads(raw_json)
-
-        if loaded_json['destination'] == 1 and self.comm_direction == TO_DRONE:
+        if loaded_json['destination'] == 1 and self.comm_direction == TO_DRONE and check_package_good(extracted_info):
             message = self._process_db_comm_protocol_type(loaded_json)
             if message != "":
-                self.sendto_smartphone(message, self.COMM_PORT_SMARTPHONE)
-        elif loaded_json['destination'] == 2:
+                status = self.sendto_smartphone(message, self.COMM_PORT_SMARTPHONE)
+        elif loaded_json['destination'] == 2 and check_package_good(extracted_info):
             message = self._process_db_comm_protocol_type(loaded_json)
             if self.comm_direction == TO_DRONE:
-                self.sendto_smartphone(message, self.COMM_PORT_SMARTPHONE)
-                self._sendto_drone(raw_json, PORT_COMMUNICATION)
+                status = self.sendto_smartphone(message, self.COMM_PORT_SMARTPHONE)
+                self._sendto_drone(raw_data.encode(), PORT_COMMUNICATION)
             else:
-                self.sendto_groundstation(raw_json, PORT_COMMUNICATION)
+                status = self.sendto_groundstation(raw_data.encode(), PORT_COMMUNICATION)
         elif loaded_json['destination'] == 3:
             if self.comm_direction == TO_DRONE:
-                self._sendto_drone(raw_json, PORT_COMMUNICATION)
+                status = self._sendto_drone(raw_data.encode(), PORT_COMMUNICATION)
             else:
                 # TODO: process GoPro command
                 pass
         elif loaded_json['destination'] == 4:
             if self.comm_direction == TO_DRONE:
-                self.sendto_smartphone(raw_json, self.COMM_PORT_SMARTPHONE)
+                status = self.sendto_smartphone(raw_data.encode(), self.COMM_PORT_SMARTPHONE)
         else:
-            print("DB_COMM_PROTO: Unknown message destination")
+            print(self.tag + "DB_COMM_PROTO: Unknown message destination")
         return status
 
     def _process_db_comm_protocol_type(self, loaded_json):
@@ -286,7 +280,7 @@ class DBProtocol:
             else:
                 message = change_settings(loaded_json, 'drone')
         else:
-            print("DB_COMM_PROTO: Unknown message type")
+            print(self.tag + "DB_COMM_PROTO: Unknown message type")
         return message
 
     def _send_hello(self):
@@ -315,18 +309,18 @@ class DBProtocol:
         depending on message type different ports/programmes aka frontends on the drone need to be addressed
         """
         if port_bytes == PORT_CONTROLLER:
-            print("Sending MSP command to RX Controller (wifi)")
+            print(self.tag + "Sending MSP command to RX Controller (wifi)")
             try:
                 raw_socket = socket(AF_PACKET, SOCK_RAW)
                 raw_socket.bind((self.interface, 0))
                 num = raw_socket.send(self.dst_mac + self.src_mac + ETH_TYPE + raw_data_bytes)
                 raw_socket.close()
             except Exception as e:
-                print(str(e) + ": Are you sure this program was run as superuser?")
+                print(self.tag + str(e) + ": Are you sure this program was run as superuser?")
                 return False
-            print("Sent it! " + str(num))
+            print(self.tag + "Sent it! " + str(num))
         else:
-            print("Sending a message to telemetry frontend on drone")
+            print(self.tag + "Sending a message to telemetry frontend on drone")
             num = self.comm_sock.sendto(raw_data_bytes, (self.ip_rx, self.udp_port_rx))
         return num
 
@@ -354,7 +348,7 @@ class DBProtocol:
             return self._open_comm_monitorsocket()
 
     def _open_comm_udpsocket(self):
-        print("Opening UDP-Socket for DroneBridge communication")
+        print(self.tag + "Opening UDP-Socket for DroneBridge communication")
         sock = socket(AF_INET, SOCK_DGRAM)
         server_address = ('', self.udp_port_rx)
         sock.bind(server_address)
@@ -365,7 +359,7 @@ class DBProtocol:
         return sock
 
     def _open_comm_monitorsocket(self):
-        print("Opening socket for monitor mode")
+        print(self.tag + "Opening socket for monitor mode")
         raw_socket = socket(AF_PACKET, SOCK_RAW, htons(0x0004))
         raw_socket.bind((self.interface, 0))
         raw_socket = self._set_comm_socket_behavior(raw_socket)
@@ -385,7 +379,7 @@ class DBProtocol:
         return adjusted_socket
 
     def _open_android_udpsocket(self):
-        print("Opening UDP-Socket to smartphone")
+        print(self.tag + "Opening UDP-Socket to smartphone")
         sock = socket(AF_INET, SOCK_DGRAM)
         address = ('', self.udp_port_smartphone)
         sock.bind(address)

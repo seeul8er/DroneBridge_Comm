@@ -1,8 +1,10 @@
 import json
 import configparser
+import binascii
+from itertools import chain
+
 
 # Creates JSON messages for DB Communication Protocol to be sent out
-from itertools import chain
 
 
 tag = 'DB_COMM_MESSAGE: '
@@ -21,14 +23,20 @@ def new_settingsresponse_message(loaded_json, origin):
     complete_response['id'] = loaded_json['id']
     if loaded_json['request'] == 'dronebridge':
         complete_response = read_dronebridge_settings(complete_response, origin)
-    else:
+    elif loaded_json['request'] == 'wifibroadcast':
         complete_response = read_wbc_settings(complete_response)
-    return json.dumps(complete_response)
+    response = json.dumps(complete_response)
+    crc32 = binascii.crc32(str.encode(complete_response))
+    #return response.encode()+crc32.to_bytes(4, byteorder='big', signed=False)
+    return str.encode(response + str(crc32))
 
 
 """returns a settings change success message"""
 def new_settingschangesuccess_message(origin, new_id):
-    return json.dumps({'destination': 4, 'type': 'settingssuccess', 'origin': origin, 'id': new_id})
+    command = json.dumps({'destination': 4, 'type': 'settingssuccess', 'origin': origin, 'id': new_id})
+    crc32 = binascii.crc32(str.encode(command))
+    #return command.encode()+crc32.to_bytes(4, byteorder='big', signed=False)
+    return str.encode(command + str(crc32))
 
 
 """takes a settings change request - executes it - returns a settings change success message"""
@@ -44,7 +52,7 @@ def read_dronebridge_settings(response_header, origin):
     if origin == 'groundstation':
         config.read(PATH_DRONEBRIDGE_TX_SETTINGS)
         section = 'TX'
-    else:
+    elif origin == 'drone':
         config.read(PATH_DRONEBRIDGE_RX_SETTINGS)
         section = 'RX'
 
@@ -68,3 +76,16 @@ def read_wbc_settings(response_header):
 
     response_header['settings'] = settings
     return response_header
+
+
+def comm_message_extract_info(message):
+    alist = message.rsplit('}',1)
+    alist[0] = alist[0]+'}'
+    return alist
+
+
+def check_package_good(extracted_info):
+    if str(binascii.crc32(str.encode(extracted_info[0]))) == extracted_info[1]:
+        return True
+    print(tag+"Bad CRC!")
+    return False
