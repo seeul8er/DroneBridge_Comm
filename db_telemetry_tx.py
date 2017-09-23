@@ -11,9 +11,6 @@ UDP_PORT_ANDROID = 1605  # Port for communication with smartphone (port on groun
 UDP_buffersize = 512  # bytes
 interface_drone_comm = "000ee8dcaa2c"
 dst = b''   # MAC address of RX-Pi (TP-Link) - mac of drone
-# TODO: at the moment comm_id must be same as dest for compatibility reasons of v1 and v2 of raw protocol. Otherwise no MSP command can be sent
-#cat /sys/class/net/wlx000ee8dcaa2c/address
-
 
 def parsearguments():
     parser = argparse.ArgumentParser(description='Put this file on TX (drone). It handles telemetry, GoPro settings'

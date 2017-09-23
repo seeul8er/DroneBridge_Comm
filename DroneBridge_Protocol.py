@@ -45,6 +45,11 @@ class DBProtocol:
         self.comm_direction = comm_direction  # set to 0x01 if program runs on groundst. and to 0x02 if runs on drone
         self.interface = interface_drone_comm  # the long range interface
         self.mode = mode
+        self.tag = ''
+        if dronebridge_port == PORT_TELEMETRY:
+            self.tag = "DB_TEL: "
+        elif dronebridge_port == PORT_COMMUNICATION:
+            self.tag = "DB_Comm: "
         if self.mode == 'wifi':
             self.short_mode = 'w'
         else:
@@ -62,11 +67,6 @@ class DBProtocol:
         self.changed = False
         self.signal = 0  # signal quality that is measured [dBm]
         self.ipgetter = DB_IP_GETTER()
-        self.tag = ''
-        if dronebridge_port == PORT_TELEMETRY:
-            self.tag = "DB_TEL: "
-        elif dronebridge_port == PORT_COMMUNICATION:
-            self.tag = "DB_Comm: "
 
     def receive_datafromdrone(self):
         """Used by db_comm_protocol - want non-blocking socket in this case"""
@@ -178,7 +178,7 @@ class DBProtocol:
                 try:
                     return self.android_sock.sendto(raw_data, (self.ip_smartp, port))
                 except:
-                    print(self.tag + "Could not send to smartphone. Make sure it is connected and has USB tethering enabled.")
+                    print(self.tag + "Could not send to smartphone ("+self.ip_smartp+"). Make sure it is connected.")
                     return 0
 
     def sendto_groundstation(self, data_bytes, port_bytes):
