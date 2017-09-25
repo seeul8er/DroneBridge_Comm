@@ -239,9 +239,9 @@ class DBProtocol:
             print(self.tag + "smartphone command could not be processed correctly")
         return thelast_keepalive
 
-    def _route_db_comm_protocol(self, raw_data):
+    def _route_db_comm_protocol(self, raw_data_decoded):
         status = False
-        extracted_info = comm_message_extract_info(raw_data) # returns json and crc string
+        extracted_info = comm_message_extract_info(raw_data_decoded) # returns json and crc string
         loaded_json = json.loads(extracted_info[0])
 
         if loaded_json['destination'] == 1 and self.comm_direction == TO_DRONE and check_package_good(extracted_info):
@@ -254,20 +254,20 @@ class DBProtocol:
             message = self._process_db_comm_protocol_type(loaded_json)
             if self.comm_direction == TO_DRONE:
                 self.sendto_smartphone(message, self.COMM_PORT_SMARTPHONE)
-                response_drone = self._redirect_comm_to_drone(raw_data)
+                response_drone = self._redirect_comm_to_drone(raw_data_decoded)
                 if response_drone != False:
                     status = self.sendto_smartphone(response_drone, self.COMM_PORT_SMARTPHONE)
             else:
-                status = self.sendto_groundstation(raw_data.encode(), PORT_COMMUNICATION)
+                status = self.sendto_groundstation(message, PORT_COMMUNICATION)
         elif loaded_json['destination'] == 3:
             if self.comm_direction == TO_DRONE:
-                status = self._sendto_drone(raw_data.encode(), PORT_COMMUNICATION)
+                status = self._sendto_drone(raw_data_decoded.encode(), PORT_COMMUNICATION)
             else:
                 # TODO: process GoPro command
                 pass
         elif loaded_json['destination'] == 4:
             if self.comm_direction == TO_DRONE:
-                status = self.sendto_smartphone(raw_data.encode(), self.COMM_PORT_SMARTPHONE)
+                status = self.sendto_smartphone(raw_data_decoded.encode(), self.COMM_PORT_SMARTPHONE)
         else:
             print(self.tag + "DB_COMM_PROTO: Unknown message destination")
         return status

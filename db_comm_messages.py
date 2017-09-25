@@ -23,8 +23,8 @@ db_settings_blacklist = ["ip_drone", "interface_selection", "interface_control",
                          "interface_comm", "joy_cal"]
 
 
-"""takes in a request - executes search for settings and creates a response"""
 def new_settingsresponse_message(loaded_json, origin):
+    """takes in a request - executes search for settings and creates a response as bytes"""
     complete_response = {}
     complete_response['destination'] = 4
     complete_response['type'] = 'settingsresponse'
@@ -49,8 +49,9 @@ def new_settingschangesuccess_message(origin, new_id):
     return str.encode(command + str(crc32))
 
 
-"""takes a settings change request - executes it - returns a settings change success message"""
+
 def change_settings(loaded_json, origin):
+    """takes a settings change request - executes it - returns a encoded settings change success message"""
     # TODO:
     return new_settingschangesuccess_message(origin, loaded_json['id'])
 
