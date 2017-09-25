@@ -38,7 +38,7 @@ def find_smartphone_ip():
     # USB Tethering
     r = check_output('ip route show 0.0.0.0/0 dev usb0 | cut -d\  -f3', shell=True)
     if r == b'':
-        return "192.168.2.2"
+        return "192.168.2.2    " #  has to be min. 15 chars long to overwrite old ip completely
     r = r[:-1]
     return str(r,'utf-8')
 
@@ -65,8 +65,6 @@ def main():
     while(keeprunning):
         time.sleep(2)
         sem.acquire()
-        # TODO: find a better way to clear memory --> if second IP is shorter than first we will get a mixture
-        memory.write("               ")
         memory.write(find_smartphone_ip())
         sem.release()
 

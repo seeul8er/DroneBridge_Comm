@@ -69,7 +69,7 @@ class DBProtocol:
         self.ipgetter = DB_IP_GETTER()
 
     def receive_datafromdrone(self):
-        """Used by db_comm_protocol - want non-blocking socket in this case"""
+        """Used by db_comm_protocol - want non-blocking socket to be able to set timeout in this case"""
         if self.mode == 'wifi':
             try:
                 data, addr = self.comm_sock.recvfrom(UDP_BUFFERSIZE)
@@ -80,11 +80,14 @@ class DBProtocol:
                 return False
         else:
             try:
-                readable, writable, exceptional = select.select([self.comm_sock], [], [], 0)
+                readable, writable, exceptional = select.select([self.comm_sock], [], [], 1.5)
                 if readable:
                     data = self._pars_packet(bytearray(self.comm_sock.recv(MONITOR_BUFFERSIZE)))
                     if data != False:
                         return data
+            except timeout as t:
+                print(self.tag + str(t) + "Socket timed out. No response received from drone (monitor mode)")
+                return False
             except Exception as e:
                 print(self.tag + str(e) + ": Error receiving data form drone (monitor mode)")
                 return False
@@ -245,11 +248,15 @@ class DBProtocol:
             message = self._process_db_comm_protocol_type(loaded_json)
             if message != "":
                 status = self.sendto_smartphone(message, self.COMM_PORT_SMARTPHONE)
+            else:
+                status = True
         elif loaded_json['destination'] == 2 and check_package_good(extracted_info):
             message = self._process_db_comm_protocol_type(loaded_json)
             if self.comm_direction == TO_DRONE:
-                status = self.sendto_smartphone(message, self.COMM_PORT_SMARTPHONE)
-                self._sendto_drone(raw_data.encode(), PORT_COMMUNICATION)
+                self.sendto_smartphone(message, self.COMM_PORT_SMARTPHONE)
+                response_drone = self._redirect_comm_to_drone(raw_data)
+                if response_drone != False:
+                    status = self.sendto_smartphone(response_drone, self.COMM_PORT_SMARTPHONE)
             else:
                 status = self.sendto_groundstation(raw_data.encode(), PORT_COMMUNICATION)
         elif loaded_json['destination'] == 3:
@@ -282,6 +289,12 @@ class DBProtocol:
         else:
             print(self.tag + "DB_COMM_PROTO: Unknown message type")
         return message
+
+    def _redirect_comm_to_drone(self, raw_data):
+        """This one will send to drone till it receives a valid response. Response is returned or False"""
+        self._sendto_drone(raw_data.encode(), PORT_COMMUNICATION)
+        response = self.receive_datafromdrone()
+        return response
 
     def _send_hello(self):
         """Send this in wifi mode to let the drone know about IP of groundstation"""
@@ -379,7 +392,7 @@ class DBProtocol:
         return adjusted_socket
 
     def _open_android_udpsocket(self):
-        print(self.tag + "Opening UDP-Socket to smartphone")
+        print(self.tag + "Opening UDP-Socket to smartphone on port: "+str(self.udp_port_smartphone)+")")
         sock = socket(AF_INET, SOCK_DGRAM)
         address = ('', self.udp_port_smartphone)
         sock.bind(address)
