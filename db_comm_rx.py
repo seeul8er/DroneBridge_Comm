@@ -60,8 +60,7 @@ def main():
     #setupVideo(mode)
 
     while True:
-        data = dbprotocol.receive_process_datafromgroundstation() # blocking
-        # TODO execute request from groundstation (GoPro settings/WBC settings/DroneBridge settings)
+        dbprotocol.receive_process_datafromgroundstation() # blocking
 
 
 if __name__ == "__main__":

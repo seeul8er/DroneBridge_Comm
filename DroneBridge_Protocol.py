@@ -133,7 +133,8 @@ class DBProtocol:
                     self._pars_packet(bytearray(self.comm_sock.recv(MONITOR_BUFFERSIZE)))
             else:
                 db_comm_prot_request = self._pars_packet(bytearray(self.comm_sock.recv(MONITOR_BUFFERSIZE)))
-                return db_comm_prot_request
+                if not self._route_db_comm_protocol(db_comm_prot_request.decode()):
+                    print(self.tag + "smartphone request could not be processed correctly")
 
     def process_smartphonerequests(self, last_keepalive):
         """See if smartphone told the groundstation to do something. Returns recent keep-alive time"""
