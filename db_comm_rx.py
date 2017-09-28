@@ -1,4 +1,5 @@
 import argparse
+import time
 from subprocess import Popen
 from DroneBridge_Protocol import DBProtocol
 from db_comm_helper import find_mac
@@ -58,7 +59,7 @@ def main():
     dbprotocol = DBProtocol(src, dst, UDP_Port_TX, IP_TX, 0, b'\x02', DB_INTERFACE, mode, extended_comm_id, frame_type, b'\x04')
 
     #setupVideo(mode)
-
+    #time.sleep(2)
     while True:
         dbprotocol.receive_process_datafromgroundstation() # blocking
 

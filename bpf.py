@@ -26,7 +26,6 @@ def attach_filter(sock, direction, dst_mac, port):
     version_port = b'\x01'+port
     dest_mac2 = int.from_bytes(dst_mac[2:6], byteorder='big', signed=False)
     dest_mac1 = int.from_bytes(bytearray(b'\x01' + direction), byteorder='big', signed=False)
-    print(dst_mac)
     BPFFILTER = [
         [0x30, 0, 0, 0x00000003],
         [0x64, 0, 0, 0x00000008],
@@ -60,6 +59,6 @@ def attach_filter(sock, direction, dst_mac, port):
     prog = BpfProgram()
     prog.bf_len = len(BPFFILTER)  # Opcode count
     prog.bf_insns = ctypes.addressof(insns)
-    sock.setsockopt(SOL_SOCKET, SO_ATTACH_FILTER, prog)
-    print("tried to attach BPF to socket.")
+    e = sock.setsockopt(SOL_SOCKET, SO_ATTACH_FILTER, prog)
+    print("Tried to attach BPF to socket. returned: "+str(e))
     return sock

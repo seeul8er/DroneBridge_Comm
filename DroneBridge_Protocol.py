@@ -26,6 +26,7 @@ DRIVER_ATHEROS = "atheros"
 DRIVER_RALINK = "ralink"
 UDP_BUFFERSIZE = 512
 MONITOR_BUFFERSIZE = 128
+MONITOR_BUFFERSIZE_COMM = 2048
 
 
 class DBProtocol:
@@ -55,7 +56,7 @@ class DBProtocol:
         else:
             self.short_mode = 'm'
         if frame_type == '1':
-            self.fcf = b'\x08\xbf'
+            self.fcf = b'\x08\x00'
             self.driver = DRIVER_RALINK
         else:
             self.fcf = b'\x80\x00'
@@ -67,6 +68,7 @@ class DBProtocol:
         self.changed = False
         self.signal = 0  # signal quality that is measured [dBm]
         self.ipgetter = DB_IP_GETTER()
+        self.first_run = True
 
     def receive_datafromdrone(self):
         """Used by db_comm_protocol - want non-blocking socket to be able to set timeout in this case"""
@@ -82,7 +84,7 @@ class DBProtocol:
             try:
                 readable, writable, exceptional = select.select([self.comm_sock], [], [], 1.5)
                 if readable:
-                    data = self._pars_packet(bytearray(self.comm_sock.recv(MONITOR_BUFFERSIZE)))
+                    data = self._pars_packet(bytearray(self.comm_sock.recv(MONITOR_BUFFERSIZE_COMM)))
                     if data != False:
                         return data
             except timeout as t:
@@ -130,11 +132,21 @@ class DBProtocol:
                 readable, writable, exceptional = select.select([self.comm_sock], [], [], 0)
                 if readable:
                     # just get RSSI of radiotap header
-                    self._pars_packet(bytearray(self.comm_sock.recv(MONITOR_BUFFERSIZE)))
+                    self._pars_packet(bytes(self.comm_sock.recv(MONITOR_BUFFERSIZE)))
             else:
-                db_comm_prot_request = self._pars_packet(bytearray(self.comm_sock.recv(MONITOR_BUFFERSIZE)))
-                if not self._route_db_comm_protocol(db_comm_prot_request.decode()):
-                    print(self.tag + "smartphone request could not be processed correctly")
+                #  TODO: bug?! beim empfangen auf Seite der Drohne und|oder der Groundstation
+                if self.first_run:
+                    self._clear_monitor_comm_socket_buffer()
+                    self.first_run = False
+                db_comm_prot_request = self._pars_packet(bytes(self.comm_sock.recv(MONITOR_BUFFERSIZE_COMM)))
+                if db_comm_prot_request != False:
+                    try:
+                        print("Received from groundstation")
+                        print(db_comm_prot_request)
+                        if not self._route_db_comm_protocol(db_comm_prot_request.decode()):
+                            print(self.tag + "smartphone request could not be processed correctly")
+                    except UnicodeDecodeError as e:
+                        print(self.tag+ "Received message not UTF-8 conform. Maybe a invalid packet in the buffer.")
 
     def process_smartphonerequests(self, last_keepalive):
         """See if smartphone told the groundstation to do something. Returns recent keep-alive time"""
@@ -218,19 +230,25 @@ class DBProtocol:
     def _pars_packet(self, packet):
         """Check if packet is OK and get RSSI. Returns False if not OK or return packet payload if it is"""
         rth_length = packet[2]
-        if self._frameis_ok(packet, rth_length):
+        payload_length = int.from_bytes(packet[(rth_length + 19):(rth_length + 20)] + packet[(rth_length + 20):(rth_length + 21)], byteorder='little', signed=False)
+        if self._frameis_ok(packet, rth_length, payload_length):
             if self.driver == DRIVER_RALINK:
                 self.signal = packet[14]
                 # self.datarate = packet[9]
             else:
                 self.signal = packet[30]
-            return packet[(rth_length + DB_80211_HEADER_LENGTH):len(packet)]
+            payload_start = rth_length + DB_80211_HEADER_LENGTH
+            return packet[payload_start:(payload_start+payload_length)]
         else:
             return False
 
-    def _frameis_ok(self, packet, radiotap_header_length):
-        # TODO: check crc8 of header or something
-        return True
+    def _frameis_ok(self, packet, radiotap_header_length, payload_length):
+        # TODO: check crc8 of header or something; currently: dump unusual large frames (ones much larger than payload)
+        if (radiotap_header_length + payload_length + DB_80211_HEADER_LENGTH + 20)>len(packet):
+            return True
+        else:
+            print(self.tag+ "Found a DroneBridge Frame that is not OK - ignoring it")
+            return False
 
     def _process_smartphonecommand(self, raw_data, thelast_keepalive):
         print("Received from SP: " + raw_data)
@@ -244,6 +262,9 @@ class DBProtocol:
         status = False
         extracted_info = comm_message_extract_info(raw_data_decoded) # returns json and crc string
         loaded_json = json.loads(extracted_info[0])
+        print("Extracted Data:")
+        print(extracted_info[0])
+        print(extracted_info[1])
 
         if loaded_json['destination'] == 1 and self.comm_direction == TO_DRONE and check_package_good(extracted_info):
             message = self._process_db_comm_protocol_type(loaded_json)
@@ -291,10 +312,17 @@ class DBProtocol:
             print(self.tag + "DB_COMM_PROTO: Unknown message type")
         return message
 
-    def _redirect_comm_to_drone(self, raw_data):
+    def _redirect_comm_to_drone(self, raw_data_decoded):
         """This one will send to drone till it receives a valid response. Response is returned or False"""
-        self._sendto_drone(raw_data.encode(), PORT_COMMUNICATION)
+        if self.first_run:
+            self._clear_monitor_comm_socket_buffer()
+            self.first_run = False
+        self._sendto_drone(raw_data_decoded.encode(), PORT_COMMUNICATION)
+        print("Forwarding to drone:")
+        print(raw_data_decoded)
         response = self.receive_datafromdrone()
+        print("Parsed packet received from drone:")
+        print(response)
         return response
 
     def _send_hello(self):
@@ -340,9 +368,10 @@ class DBProtocol:
 
     def _send_monitor(self, data_bytes, port_bytes, direction):
         """Send a packet in monitor mode"""
-        payload_length_bytes = [bytes(chr(len(data_bytes) >> i & 0xff).encode()) for i in (24, 16, 8, 0)]
-        crc_content = bytes(bytearray(DB_FRAME_VERSION + port_bytes + direction + payload_length_bytes[3]
-                                      + payload_length_bytes[2]))
+        # TODO: Wrong payload_length bytes for >128 bytes
+        payload_length_bytes = bytes(len(data_bytes).to_bytes(2, byteorder='little', signed=False))
+        # payload_length_bytes = [bytes(chr(len(data_bytes) >> i & 0xff).encode()) for i in (24, 16, 8, 0)]
+        crc_content = bytes(bytearray(DB_FRAME_VERSION + port_bytes + direction + payload_length_bytes))
         crc = crc8.crc8()
         crc.update(crc_content)
         ieee_min_header_mod = bytes(
@@ -350,7 +379,7 @@ class DBProtocol:
         while True:
             r, w, e = select.select([], [self.comm_sock], [], 0)
             if w:
-                num = self.comm_sock.send(RADIOTAP_HEADER + ieee_min_header_mod + data_bytes)
+                num = self.comm_sock.sendall(RADIOTAP_HEADER + ieee_min_header_mod + data_bytes)
                 break
         return num
 
@@ -391,6 +420,16 @@ class DBProtocol:
         elif self.comm_direction == TO_DRONE and self.db_port == PORT_COMMUNICATION:  # On ground side in comm module
             adjusted_socket.setblocking(False)
         return adjusted_socket
+
+    def _clear_monitor_comm_socket_buffer(self):
+        self.comm_sock.setblocking(False)
+        while True:
+            readable, writable, exceptional = select.select([self.comm_sock], [], [], 1)
+            if readable:
+                self.comm_sock.recv(8192)
+            else:
+                break
+        self.comm_sock.setblocking(True)
 
     def _open_android_udpsocket(self):
         print(self.tag + "Opening UDP-Socket to smartphone on port: "+str(self.udp_port_smartphone)+")")
