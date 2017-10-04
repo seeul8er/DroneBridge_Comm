@@ -260,8 +260,8 @@ class DBProtocol:
 
     def _route_db_comm_protocol(self, raw_data_decoded):
         status = False
-        extracted_info = comm_message_extract_info(raw_data_decoded) # returns json and crc string
-        loaded_json = json.loads(extracted_info[0])
+        extracted_info = comm_message_extract_info(str.encode(raw_data_decoded)) # returns json bytes and crc bytes
+        loaded_json = json.loads(extracted_info[0].decode())
         print("Extracted Data:")
         print(extracted_info[0])
         print(extracted_info[1])

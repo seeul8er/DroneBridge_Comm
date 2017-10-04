@@ -8,9 +8,6 @@ from itertools import chain
 
 
 tag = 'DB_COMM_MESSAGE: '
-#PATH_DRONEBRIDGE_TX_SETTINGS = "/home/cyber/Dokumente/DroneBridgeTX.ini"
-#PATH_DRONEBRIDGE_RX_SETTINGS = "/home/cyber/Dokumente/DroneBridgeRX.ini"
-#PATH_WBC_SETTINGS = "/home/cyber/Dokumente/wifibroadcast-1.txt"
 PATH_DRONEBRIDGE_TX_SETTINGS = "/boot/DroneBridgeTX.ini"
 PATH_DRONEBRIDGE_RX_SETTINGS = "/boot/DroneBridgeRX.ini"
 PATH_WBC_SETTINGS = "/boot/wifibroadcast-1.txt"
@@ -37,16 +34,16 @@ def new_settingsresponse_message(loaded_json, origin):
         complete_response = read_wbc_settings(complete_response)
     response = json.dumps(complete_response)
     crc32 = binascii.crc32(str.encode(response))
-    #return response.encode()+crc32.to_bytes(4, byteorder='big', signed=False)
-    return str.encode(response + str(crc32))
+    return response.encode()+crc32.to_bytes(4, byteorder='little', signed=False)
+    #return str.encode(response + str(crc32))
 
 
 """returns a settings change success message"""
 def new_settingschangesuccess_message(origin, new_id):
     command = json.dumps({'destination': 4, 'type': 'settingssuccess', 'origin': origin, 'id': new_id})
     crc32 = binascii.crc32(str.encode(command))
-    #return command.encode()+crc32.to_bytes(4, byteorder='big', signed=False)
-    return str.encode(command + str(crc32))
+    return command.encode()+crc32.to_bytes(4, byteorder='little', signed=False)
+    #return str.encode(command + str(crc32))
 
 
 
@@ -92,13 +89,16 @@ def read_wbc_settings(response_header):
 
 
 def comm_message_extract_info(message):
-    alist = message.rsplit('}',1)
-    alist[0] = alist[0]+'}'
+    alist = message.rsplit(b'}', 1)
+    #alist = message.rsplit('}',1)
+    #alist[0] = alist[0] + '}'
+    alist[0] = alist[0]+b'}'
     return alist
 
 
 def check_package_good(extracted_info):
-    if str(binascii.crc32(str.encode(extracted_info[0]))) == extracted_info[1]:
+    if binascii.crc32(extracted_info[0]).to_bytes(4, byteorder='little', signed=False) == extracted_info[1]:
+    #if str(binascii.crc32(str.encode(extracted_info[0]))) == extracted_info[1]:
         return True
     print(tag+"Bad CRC!")
     return False
