@@ -134,7 +134,6 @@ class DBProtocol:
                     # just get RSSI of radiotap header
                     self._pars_packet(bytes(self.comm_sock.recv(MONITOR_BUFFERSIZE)))
             else:
-                #  TODO: bug?! beim empfangen auf Seite der Drohne und|oder der Groundstation
                 if self.first_run:
                     self._clear_monitor_comm_socket_buffer()
                     self.first_run = False
@@ -368,9 +367,7 @@ class DBProtocol:
 
     def _send_monitor(self, data_bytes, port_bytes, direction):
         """Send a packet in monitor mode"""
-        # TODO: Wrong payload_length bytes for >128 bytes
         payload_length_bytes = bytes(len(data_bytes).to_bytes(2, byteorder='little', signed=False))
-        # payload_length_bytes = [bytes(chr(len(data_bytes) >> i & 0xff).encode()) for i in (24, 16, 8, 0)]
         crc_content = bytes(bytearray(DB_FRAME_VERSION + port_bytes + direction + payload_length_bytes))
         crc = crc8.crc8()
         crc.update(crc_content)
