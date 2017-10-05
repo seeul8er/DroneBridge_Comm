@@ -9,7 +9,7 @@ from subprocess import call
 
 from bpf import attach_filter
 from db_comm_messages import change_settings, new_settingsresponse_message, comm_message_extract_info, \
-    check_package_good
+    check_package_good, change_settings_gopro
 from db_ip_checker import DB_IP_GETTER
 
 RADIOTAP_HEADER = b'\x00\x00\x0c\x00\x04\x80\x00\x00\x0c\x00\x18\x00'  # 6Mbit transmission speed set with Ralink chips
@@ -284,8 +284,7 @@ class DBProtocol:
             if self.comm_direction == TO_DRONE:
                 status = self._sendto_drone(raw_data_decoded.encode(), PORT_COMMUNICATION)
             else:
-                # TODO: process GoPro command
-                pass
+                change_settings_gopro(loaded_json)
         elif loaded_json['destination'] == 4:
             if self.comm_direction == TO_DRONE:
                 status = self.sendto_smartphone(raw_data_decoded.encode(), self.COMM_PORT_SMARTPHONE)

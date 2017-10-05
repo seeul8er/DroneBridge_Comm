@@ -46,11 +46,53 @@ def new_settingschangesuccess_message(origin, new_id):
     #return str.encode(command + str(crc32))
 
 
+def change_settings_wbc(loaded_json, origin):
+    # TODO debug - not working
+    virtual_section = 'root'
+    config = configparser.ConfigParser()
+    for key in loaded_json['settings']:
+        config.set(virtual_section, key, loaded_json['settings'][key])
+    with open(PATH_WBC_SETTINGS, 'r+') as configfile:
+        content = configfile.read()
+        configfile.seek(0, 0)
+        configfile.write("["+virtual_section+"]\n"+content)
+        config.write(configfile)
+
+
+def change_settings_db(loaded_json, origin):
+    config = configparser.ConfigParser()
+    section = ''
+    filepath = ''
+    if origin=='groundstation':
+        section = 'TX'
+        filepath = PATH_DRONEBRIDGE_TX_SETTINGS
+    elif origin == 'drone':
+        section = 'RX'
+        filepath = PATH_DRONEBRIDGE_RX_SETTINGS
+
+    for key in loaded_json['settings'][section]:
+        config.set(section, key, loaded_json['settings'][section][key])
+    with open(filepath, 'w') as configfile:
+        config.write(configfile)
+    return True
+
 
 def change_settings(loaded_json, origin):
     """takes a settings change request - executes it - returns a encoded settings change success message"""
-    # TODO:
-    return new_settingschangesuccess_message(origin, loaded_json['id'])
+    worked = False
+    if loaded_json['change'] == 'db':
+        worked = change_settings_db(loaded_json, origin)
+    elif loaded_json['change'] == 'wbc':
+        worked = change_settings_wbc(loaded_json, origin)
+    if worked:
+        return new_settingschangesuccess_message(origin, loaded_json['id'])
+    else:
+        return "error_settingschange".encode()
+
+
+def change_settings_gopro(loaded_json):
+    # TODO change GoPro settings
+    pass
 
 
 def read_dronebridge_settings(response_header, origin):
