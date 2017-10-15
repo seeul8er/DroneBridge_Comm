@@ -152,7 +152,7 @@ class DBProtocol:
         r, w, e = select.select([self.android_sock], [], [], 0)
         if r:
             smartph_data, android_addr = self.android_sock.recvfrom(UDP_BUFFERSIZE)
-            return self._process_smartphonecommand(smartph_data.decode(), last_keepalive)
+            return self._process_smartphonecommand(smartph_data, last_keepalive)
         return last_keepalive
 
     def check_smartphone_ready(self):
@@ -250,16 +250,20 @@ class DBProtocol:
             return False
 
     def _process_smartphonecommand(self, raw_data, thelast_keepalive):
-        print("Received from SP: " + raw_data)
-        if raw_data == "smartphone_is_still_here":
-            return time.time()
+        try:
+            raw_data_decoded = bytes.decode(raw_data)
+            print("Received from SP: " + raw_data_decoded)
+            if raw_data == "smartphone_is_still_here":
+                return time.time()
+        except UnicodeDecodeError as unicodeerr:
+            pass
         if not self._route_db_comm_protocol(raw_data):
             print(self.tag + "smartphone command could not be processed correctly")
         return thelast_keepalive
 
-    def _route_db_comm_protocol(self, raw_data_decoded):
+    def _route_db_comm_protocol(self, raw_data_encoded):
         status = False
-        extracted_info = comm_message_extract_info(str.encode(raw_data_decoded)) # returns json bytes and crc bytes
+        extracted_info = comm_message_extract_info(raw_data_encoded) # returns json bytes and crc bytes
         loaded_json = json.loads(extracted_info[0].decode())
         print("Extracted Data:")
         print(extracted_info[0])
@@ -275,19 +279,19 @@ class DBProtocol:
             message = self._process_db_comm_protocol_type(loaded_json)
             if self.comm_direction == TO_DRONE:
                 self.sendto_smartphone(message, self.COMM_PORT_SMARTPHONE)
-                response_drone = self._redirect_comm_to_drone(raw_data_decoded)
+                response_drone = self._redirect_comm_to_drone(raw_data_encoded)
                 if response_drone != False:
                     status = self.sendto_smartphone(response_drone, self.COMM_PORT_SMARTPHONE)
             else:
                 status = self.sendto_groundstation(message, PORT_COMMUNICATION)
         elif loaded_json['destination'] == 3:
             if self.comm_direction == TO_DRONE:
-                status = self._sendto_drone(raw_data_decoded.encode(), PORT_COMMUNICATION)
+                status = self._sendto_drone(raw_data_encoded, PORT_COMMUNICATION)
             else:
                 change_settings_gopro(loaded_json)
         elif loaded_json['destination'] == 4:
             if self.comm_direction == TO_DRONE:
-                status = self.sendto_smartphone(raw_data_decoded.encode(), self.COMM_PORT_SMARTPHONE)
+                status = self.sendto_smartphone(raw_data_encoded, self.COMM_PORT_SMARTPHONE)
         else:
             print(self.tag + "DB_COMM_PROTO: Unknown message destination")
         return status
@@ -310,14 +314,14 @@ class DBProtocol:
             print(self.tag + "DB_COMM_PROTO: Unknown message type")
         return message
 
-    def _redirect_comm_to_drone(self, raw_data_decoded):
+    def _redirect_comm_to_drone(self, raw_data_encoded):
         """This one will send to drone till it receives a valid response. Response is returned or False"""
         if self.first_run:
             self._clear_monitor_comm_socket_buffer()
             self.first_run = False
-        self._sendto_drone(raw_data_decoded.encode(), PORT_COMMUNICATION)
+        self._sendto_drone(raw_data_encoded, PORT_COMMUNICATION)
         print("Forwarding to drone:")
-        print(raw_data_decoded)
+        print(raw_data_encoded)
         response = self.receive_datafromdrone()
         print("Parsed packet received from drone:")
         print(response)
