@@ -265,9 +265,6 @@ class DBProtocol:
         status = False
         extracted_info = comm_message_extract_info(raw_data_encoded) # returns json bytes and crc bytes
         loaded_json = json.loads(extracted_info[0].decode())
-        print("Extracted Data:")
-        print(extracted_info[0])
-        print(extracted_info[1])
 
         if loaded_json['destination'] == 1 and self.comm_direction == TO_DRONE and check_package_good(extracted_info):
             message = self._process_db_comm_protocol_type(loaded_json)

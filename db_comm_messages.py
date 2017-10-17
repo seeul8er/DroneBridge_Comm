@@ -35,7 +35,6 @@ def new_settingsresponse_message(loaded_json, origin):
     response = json.dumps(complete_response)
     crc32 = binascii.crc32(str.encode(response))
     return response.encode()+crc32.to_bytes(4, byteorder='little', signed=False)
-    #return str.encode(response + str(crc32))
 
 
 """returns a settings change success message"""
@@ -43,24 +42,31 @@ def new_settingschangesuccess_message(origin, new_id):
     command = json.dumps({'destination': 4, 'type': 'settingssuccess', 'origin': origin, 'id': new_id})
     crc32 = binascii.crc32(str.encode(command))
     return command.encode()+crc32.to_bytes(4, byteorder='little', signed=False)
-    #return str.encode(command + str(crc32))
 
 
 def change_settings_wbc(loaded_json, origin):
-    # TODO debug - not working
+    # add virtual section so config parser can read it
     virtual_section = 'root'
-    config = configparser.ConfigParser()
-    for key in loaded_json['settings']:
-        config.set(virtual_section, key, loaded_json['settings'][key])
-    with open(PATH_WBC_SETTINGS, 'r+') as configfile:
-        content = configfile.read()
-        configfile.seek(0, 0)
-        configfile.write("["+virtual_section+"]\n"+content)
-        config.write(configfile)
+    line = '['+virtual_section+']'
+    with open(PATH_WBC_SETTINGS, 'r+') as file:
+        content = file.read()
+        file.seek(0, 0)
+        file.write(line.rstrip('\r\n') + '\n' + content)
+    with open(PATH_WBC_SETTINGS, 'r+') as file:
+        configpars = configparser.ConfigParser()
+        configpars.optionxform = str
+        configpars.read(PATH_WBC_SETTINGS)
+        for key in loaded_json['settings']:
+            configpars.set(virtual_section, key, loaded_json['settings'][key])
+        configpars.write(file, space_around_delimiters=False)
+    # remove section again
+    remove_first_line(PATH_WBC_SETTINGS)
+    return True
 
 
 def change_settings_db(loaded_json, origin):
     config = configparser.ConfigParser()
+    config.optionxform = str
     section = ''
     filepath = ''
     if origin=='groundstation':
@@ -73,7 +79,7 @@ def change_settings_db(loaded_json, origin):
     for key in loaded_json['settings'][section]:
         config.set(section, key, loaded_json['settings'][section][key])
     with open(filepath, 'w') as configfile:
-        config.write(configfile)
+        config.write(configfile, space_around_delimiters=False)
     return True
 
 
@@ -97,6 +103,7 @@ def change_settings_gopro(loaded_json):
 
 def read_dronebridge_settings(response_header, origin):
     config = configparser.ConfigParser()
+    config.optionxform = str
     section = ''
     settings = {}
     if origin == 'groundstation':
@@ -118,6 +125,7 @@ def read_wbc_settings(response_header):
     virtual_section = 'root'
     settings = {}
     config = configparser.ConfigParser()
+    config.optionxform = str
     with open(PATH_WBC_SETTINGS, 'r') as lines:
         lines = chain(('['+virtual_section+']',), lines)
         config.read_file(lines)
@@ -130,17 +138,21 @@ def read_wbc_settings(response_header):
     return response_header
 
 
+def remove_first_line(filepath):
+    with open(filepath, 'r') as f1:
+        data = f1.read().splitlines(True)
+    with open(filepath, 'w') as f2:
+        f2.writelines(data[1:])
+
+
 def comm_message_extract_info(message):
     alist = message.rsplit(b'}', 1)
-    #alist = message.rsplit('}',1)
-    #alist[0] = alist[0] + '}'
     alist[0] = alist[0]+b'}'
     return alist
 
 
 def check_package_good(extracted_info):
     if binascii.crc32(extracted_info[0]).to_bytes(4, byteorder='little', signed=False) == extracted_info[1]:
-    #if str(binascii.crc32(str.encode(extracted_info[0]))) == extracted_info[1]:
         return True
     print(tag+"Bad CRC!")
     return False
