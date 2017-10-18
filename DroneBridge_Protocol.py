@@ -142,7 +142,7 @@ class DBProtocol:
                     try:
                         print("Received from groundstation")
                         print(db_comm_prot_request)
-                        if not self._route_db_comm_protocol(db_comm_prot_request.decode()):
+                        if not self._route_db_comm_protocol(db_comm_prot_request):
                             print(self.tag + "smartphone request could not be processed correctly")
                     except UnicodeDecodeError as e:
                         print(self.tag+ "Received message not UTF-8 conform. Maybe a invalid packet in the buffer.")
@@ -280,7 +280,9 @@ class DBProtocol:
                 if response_drone != False:
                     status = self.sendto_smartphone(response_drone, self.COMM_PORT_SMARTPHONE)
             else:
-                status = self.sendto_groundstation(message, PORT_COMMUNICATION)
+                sentbytes = self.sendto_groundstation(message, PORT_COMMUNICATION)
+                if sentbytes > 0:
+                    status = True
         elif loaded_json['destination'] == 3:
             if self.comm_direction == TO_DRONE:
                 status = self._sendto_drone(raw_data_encoded, PORT_COMMUNICATION)
