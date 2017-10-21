@@ -278,10 +278,11 @@ class DBProtocol:
                 self.sendto_smartphone(message, self.COMM_PORT_SMARTPHONE)
                 response_drone = self._redirect_comm_to_drone(raw_data_encoded)
                 if response_drone != False:
+                    #  TODO: check if it is a success message and only then change as well on groundstation side
                     status = self.sendto_smartphone(response_drone, self.COMM_PORT_SMARTPHONE)
             else:
                 sentbytes = self.sendto_groundstation(message, PORT_COMMUNICATION)
-                if sentbytes > 0:
+                if sentbytes == None:
                     status = True
         elif loaded_json['destination'] == 3:
             if self.comm_direction == TO_DRONE:

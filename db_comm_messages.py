@@ -45,41 +45,44 @@ def new_settingschangesuccess_message(origin, new_id):
 
 
 def change_settings_wbc(loaded_json, origin):
-    # add virtual section so config parser can read it
-    virtual_section = 'root'
-    line = '['+virtual_section+']'
-    with open(PATH_WBC_SETTINGS, 'r+') as file:
-        content = file.read()
-        file.seek(0, 0)
-        file.write(line.rstrip('\r\n') + '\n' + content)
-    with open(PATH_WBC_SETTINGS, 'r+') as file:
-        configpars = configparser.ConfigParser()
-        configpars.optionxform = str
-        configpars.read(PATH_WBC_SETTINGS)
-        for key in loaded_json['settings']:
-            configpars.set(virtual_section, key, loaded_json['settings'][key])
-        configpars.write(file, space_around_delimiters=False)
-    # remove section again
-    remove_first_line(PATH_WBC_SETTINGS)
+    try:
+        with open(PATH_WBC_SETTINGS, 'r+') as file:
+            lines = file.readlines()
+            for key in loaded_json['settings']:
+                for index, line in enumerate(lines):
+                    if line.startswith(key+"="):
+                        lines[index] = key+"="+loaded_json['settings'][key]+"\n"
+            file.seek(0, 0)
+            for line in lines:
+                file.write(line)
+    except Exception as ex:
+        print("Error writing wbc settings: " + str(ex))
+        return False
     return True
 
 
 def change_settings_db(loaded_json, origin):
-    config = configparser.ConfigParser()
-    config.optionxform = str
-    section = ''
-    filepath = ''
-    if origin=='groundstation':
-        section = 'TX'
-        filepath = PATH_DRONEBRIDGE_TX_SETTINGS
-    elif origin == 'drone':
-        section = 'RX'
-        filepath = PATH_DRONEBRIDGE_RX_SETTINGS
-
-    for key in loaded_json['settings'][section]:
-        config.set(section, key, loaded_json['settings'][section][key])
-    with open(filepath, 'w') as configfile:
-        config.write(configfile, space_around_delimiters=False)
+    try:
+        section = ''
+        filepath = ''
+        if origin=='groundstation':
+            section = 'TX'
+            filepath = PATH_DRONEBRIDGE_TX_SETTINGS
+        elif origin == 'drone':
+            section = 'RX'
+            filepath = PATH_DRONEBRIDGE_RX_SETTINGS
+        with open(filepath, 'r+') as file:
+            lines = file.readlines()
+            for key in loaded_json['settings'][section]:
+                for index, line in enumerate(lines):
+                    if line.startswith(key+"="):
+                        lines[index] = key+"="+loaded_json['settings'][section][key]+"\n"
+            file.seek(0, 0)
+            for line in lines:
+                file.write(line)
+    except Exception as ex:
+        print("Error writing wbc settings: "+str(ex))
+        return False
     return True
 
 
