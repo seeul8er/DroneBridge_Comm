@@ -1,7 +1,7 @@
 import argparse
+
 from DroneBridge_Protocol import DBProtocol
 from db_comm_helper import find_mac
-import os
 
 # Default values, may get overridden by command line arguments
 
@@ -15,6 +15,7 @@ dst = b''   # MAC address of RX-Pi (TP-Link) - mac of drone
 pipenames = ["telemetryfifo1", "telemetryfifo2", "telemetryfifo3", "telemetryfifo4", "telemetryfifo5", "telemetryfifo6"]
 pipes = []
 fifo_write = None
+
 
 def write_tofifos(received_bytes):
     # fifo_write = open(path, "wb")
