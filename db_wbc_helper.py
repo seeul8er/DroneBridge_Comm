@@ -1,5 +1,8 @@
 import ctypes
 import mmap
+import time
+
+from shmemctypes import ShmemRawArray
 
 
 class wifi_adapter_rx_status_t(ctypes.Structure):
@@ -31,3 +34,18 @@ def open_shm():
 
 def read_wbc_status(mapped_structure):
     wbc_status = WBC_RX_Status.from_buffer(mapped_structure)
+    print(str(wbc_status.kbitrate)+"kbit/s"+" "+str(wbc_status.damaged_block_cnt)+" damages blocks")
+
+
+def main():
+    print("DB_WBC_STATUSREADER: starting")
+    shared_data = ShmemRawArray(WBC_RX_Status, 0, "/wifibroadcast_rx_status_0", False)
+    #mymap = open_shm()
+    while(True):
+        for d in shared_data:
+            print(str(d.received_block_cnt))
+        time.sleep(1)
+
+
+if __name__ == "__main__":
+    main()
