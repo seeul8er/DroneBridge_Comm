@@ -45,7 +45,6 @@ def find_smartphone_ip():
 
 def main():
     print("DB_IPCHECKER: starting")
-    keeprunning = True
     try:
         memory = sysv_ipc.SharedMemory(key_smartphone_ip_sm, sysv_ipc.IPC_CREX)
     except sysv_ipc.ExistentialError:
@@ -62,11 +61,10 @@ def main():
         # Initializing sem.o_time to nonzero value
         sem.release()
 
-    while(keeprunning):
-        time.sleep(2)
-        sem.acquire()
-        memory.write(find_smartphone_ip())
-        sem.release()
+    time.sleep(2)
+    sem.acquire()
+    memory.write(find_smartphone_ip())
+    sem.release()
 
 
 if __name__ == "__main__":
