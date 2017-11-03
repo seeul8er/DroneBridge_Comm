@@ -1,6 +1,6 @@
 import time
 import sysv_ipc
-from subprocess import *
+import netifaces
 
 # memory map
 # 111111 = smartphone ip
@@ -30,17 +30,21 @@ class DB_IP_GETTER():
         self.sem.acquire()
         ip = str(self.memory.read(key_smartphone_ip_sm).strip(), 'utf-8')
         self.sem.release()
-        #print("DB_IP_GETTER: Loaded IP: "+ip)
         return ip
 
 
 def find_smartphone_ip():
-    # USB Tethering
-    r = check_output('ip route show 0.0.0.0/0 dev usb0 | cut -d\  -f3', shell=True)
-    if r == b'':
-        return "192.168.2.2    " #  has to be min. 15 chars long to overwrite old ip completely
-    r = r[:-1]
-    return str(r,'utf-8')
+    try:
+        interfaces = netifaces.interfaces()
+        for inter in interfaces:
+             if inter == "usb0":
+                 time.sleep(3)
+                 g = netifaces.gateways()
+                 return g["default"][netifaces.AF_INET][0]
+        return "192.168.2.2    "
+    except KeyError:
+        print("IP_CHECKER: KeyError")
+        return "192.168.29.129"
 
 
 def main():
@@ -61,10 +65,11 @@ def main():
         # Initializing sem.o_time to nonzero value
         sem.release()
 
-    time.sleep(2)
-    sem.acquire()
-    memory.write(find_smartphone_ip())
-    sem.release()
+    while(True):
+        time.sleep(2)
+        sem.acquire()
+        memory.write(find_smartphone_ip())
+        sem.release()
 
 
 if __name__ == "__main__":
