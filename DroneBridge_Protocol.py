@@ -65,9 +65,9 @@ class DBProtocol:
         self.comm_sock = self._open_comm_sock()
         if self.comm_direction == TO_DRONE:
             self.android_sock = self._open_android_udpsocket()
+            self.ipgetter = DB_IP_GETTER()
         self.changed = False
         self.signal = 0  # signal quality that is measured [dBm]
-        self.ipgetter = DB_IP_GETTER()
         self.first_run = True
 
     def receive_datafromdrone(self):
