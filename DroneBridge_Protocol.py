@@ -437,8 +437,9 @@ class DBProtocol:
         sock = socket(AF_INET, SOCK_DGRAM)
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
         sock.setsockopt(SOL_SOCKET, SO_BROADCAST, 1)
-        address = ('', self.udp_port_smartphone)
-        sock.bind(address)
+        if self.db_port == PORT_COMMUNICATION:
+            address = ('', self.udp_port_smartphone)
+            sock.bind(address)
         sock.setblocking(False)
         print("Done")
         return sock
