@@ -14,14 +14,17 @@ UDP_buffersize = 512  # bytes
 SerialPort = '/dev/ttyAMA0'  # connect this one to your flight controller
 AB_INTERFACE = "wlan1"
 
-# payload+crc
-sizeGPS = 15
-sizeAtt = 7
-sizeStatus = 8
+# LTM: payload+crc
+LTM_sizeGPS = 15
+LTM_sizeAtt = 7
+LTM_sizeStatus = 8
 dst = b''
 
+MavLink_junksize = 128 # bytes
+
+
 def openTXUDP_Socket():
-    print("Opening UDP-Socket towards TX-Pi - listening on port " + str(UDP_Port_TX))
+    print("DB_RX_TEL: Opening UDP-Socket towards TX-Pi - listening on port " + str(UDP_Port_TX))
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     server_address = ('', UDP_Port_TX)
     sock.bind(server_address)
@@ -29,7 +32,7 @@ def openTXUDP_Socket():
 
 
 def openFCTel_Socket():
-    print("Opening Telemetrie-Socket " + SerialPort + " (to listen to FC)")
+    print("DB_RX_TEL: Opening Telemetrie-Socket " + SerialPort + " (to listen to FC)")
     ser = serial.Serial(SerialPort, timeout=None)
     return ser
 
@@ -40,21 +43,41 @@ def getGoPro_Status_JSON():
 
 
 def read_LTM_Frame(functionbyte, serial_socket):
+    """:returns complete LTM frame"""
     if functionbyte == b'A':
-        return bytes(bytearray(b'$TA'+serial_socket.read(sizeAtt)))
+        return bytes(bytearray(b'$TA' + serial_socket.read(LTM_sizeAtt)))
     elif functionbyte == b'S':
-        return bytes(bytearray(b'$TS'+serial_socket.read(sizeStatus)))
+        return bytes(bytearray(b'$TS' + serial_socket.read(LTM_sizeStatus)))
     elif functionbyte == b'G':
-        return bytes(bytearray(b'$TG'+serial_socket.read(sizeGPS)))
+        return bytes(bytearray(b'$TG' + serial_socket.read(LTM_sizeGPS)))
     elif functionbyte == b'O':
-        return bytes(bytearray(b'$TO'+serial_socket.read(sizeGPS)))
+        return bytes(bytearray(b'$TO' + serial_socket.read(LTM_sizeGPS)))
     elif functionbyte == b'N':
-        return bytes(bytearray(b'$TN'+serial_socket.read(sizeAtt)))
+        return bytes(bytearray(b'$TN' + serial_socket.read(LTM_sizeAtt)))
     elif functionbyte == b'X':
-        return bytes(bytearray(b'$TX'+serial_socket.read(sizeAtt)))
+        return bytes(bytearray(b'$TX' + serial_socket.read(LTM_sizeAtt)))
     else:
         print("unknown Frame!")
         return b'$T?'
+
+
+def isitLTM_telemetry(telemetry_socket):
+    for i in range(1,50):
+        if telemetry_socket.read() == b'$':
+            if telemetry_socket.read() == b'T':
+                if check_LTM_crc_valid(read_LTM_Frame(telemetry_socket.read(), telemetry_socket)):
+                    print("DB_RX_TEL: Detected LTM telemetry stream")
+                    return True
+    print("DB_RX_TEL: Detected possible MavLink telemetry stream.")
+    return False
+
+
+def check_LTM_crc_valid(bytes_LTM_complete):
+    """bytes_LTM_payload_crc is LTM payload+crc bytes"""
+    crc = 0x00
+    for byte in bytes_LTM_complete[3:]:
+        crc = crc ^ (byte & 0xFF)
+    return (crc == 0)
 
 
 def setupVideo(mode):
@@ -76,6 +99,9 @@ def parseArguments():
                              ' it on to the groundstation via DroneBridge-Protocol. Disable wifibroadcast telemetry to '
                              'not block the socket. Use [yes|no]',
                         default='no')
+    parser.add_argument('-l', action='store', dest='telemetry_type',
+                        help='Set telemetry type manually. Default is [auto]. Use [ltm|mavlink|auto]',
+                        default='auto')
     parser.add_argument('-p', action="store", dest='udp_port_tx', help='Local and remote port on which we need to address '
                                                                        'our packets for the groundstation and listen for '
                                                                        'commands coming from groundstation (same port '
@@ -104,33 +130,45 @@ def main():
     mode = parsedArgs.mode
     frame_type = parsedArgs.frame_type
     DB_INTERFACE = parsedArgs.DB_INTERFACE
+    telemetry_selection_auto = False
+    isLTMTel = True
+    if parsedArgs.telemetry_type == "mavlink":
+        isLTMTel = False
+    elif parsedArgs.telemetry_type == "auto":
+        telemetry_selection_auto = True
+        isLTMTel = False
     src = find_mac(DB_INTERFACE)
     comm_id = bytes(b'\x01'+b'\x02'+bytearray.fromhex(parsedArgs.comm_id))
     # print("DB_RX_TEL: Communication ID: " + comm_id.hex()) # only works in python 3.5
     print("DB_RX_TEL: Communication ID: " + str(comm_id))
     dbprotocol = DBProtocol(src, dst, UDP_Port_TX, IP_TX, 0, b'\x02', DB_INTERFACE, mode, comm_id, frame_type, b'\x02')
 
+
     if istelemetryenabled:
         tel_sock = openFCTel_Socket()
+        time.sleep(0.3)
+        if telemetry_selection_auto:
+            isLTMTel = isitLTM_telemetry(tel_sock)
     time.sleep(0.3)
 
     while True:
-        # Test
-        # LTM_Frame = b'$TA\x00\x00\x01\x00\xf0\x00\xf1'
-        # dbprotocol.sendto_groundstation(LTM_Frame, b'\x02')
-        # time.sleep(1)
-        # Test end
         if istelemetryenabled:
-            if tel_sock.read() == b'$':
-                tel_sock.read()  # next one is always a 'T' (do not care)
-                LTM_Frame = read_LTM_Frame(tel_sock.read(), tel_sock)
-                dbprotocol.sendto_groundstation(LTM_Frame, b'\x02')
-                # create DroneBridgeFrame and send
-                if LTM_Frame[2] == 83:  # int("53", 16) --> 0x53 = S in UTF-8 --> sending frame after each status frame
-                    dbprotocol.send_dronebridge_frame()
-        dbprotocol.receive_process_datafromgroundstation()  # to get the beacon frame and its RSSI values
-        if not istelemetryenabled:
-            # DroneBridge LTM Frame is triggered from LTM origin frame. If telemetry is "no" we need to change trigger
+            if isLTMTel:
+                if tel_sock.read() == b'$':
+                    tel_sock.read()  # next one is always a 'T' (do not care)
+                    LTM_Frame = read_LTM_Frame(tel_sock.read(), tel_sock)
+                    dbprotocol.sendto_groundstation(LTM_Frame, b'\x02')
+                    # TODO: deprecated, use control module (drone) --> status module (ground)
+                    if LTM_Frame[2] == 83:  # int("53", 16) --> 0x53 = S in UTF-8 --> sending frame after each status frame
+                        dbprotocol.send_dronebridge_frame()
+                # TODO: deprecated, use control module (drone) --> status module (ground)
+                dbprotocol.receive_process_datafromgroundstation()  # to get the beacon frame and its RSSI values
+            else:
+                # it is not LTM --> fully transparent link for MavLink and other protocols
+                dbprotocol.sendto_groundstation(tel_sock.read(MavLink_junksize), b'\x02')
+        if not istelemetryenabled and isLTMTel:
+            # TODO: deprecated, use control module (drone) --> status module (ground)
+            # DroneBridge LTM Frame is triggered from telemetry. If telemetry is "no" we need to change trigger
             dbprotocol.send_dronebridge_frame()
             time.sleep(0.2)
 

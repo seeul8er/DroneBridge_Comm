@@ -4,7 +4,6 @@ from socket import *
 import crc8
 import time
 import select
-import psutil
 from subprocess import call
 
 from bpf import attach_filter
@@ -20,18 +19,19 @@ PORT_CONTROLLER = b'\x01'
 PORT_TELEMETRY = b'\x02'
 PORT_VIDEO = b'\x03'
 PORT_COMMUNICATION = b'\x04'
+PORT_STATUS = b'\x04'
 ETH_TYPE = b"\x88\xAB"
 DB_80211_HEADER_LENGTH = 24
 DRIVER_ATHEROS = "atheros"
 DRIVER_RALINK = "ralink"
 UDP_BUFFERSIZE = 512
-MONITOR_BUFFERSIZE = 128
+MONITOR_BUFFERSIZE = 256
 MONITOR_BUFFERSIZE_COMM = 2048
 
 
 class DBProtocol:
     ip_smartp = "192.168.42.129"
-    LTM_PORT_SMARTPHONE = 1604
+    TEL_PORT_SMARTPHONE = 1604
     COMM_PORT_SMARTPHONE = 1603
 
     def __init__(self, src_mac, dst_mac, udp_port_rx, ip_rx, udp_port_smartphone, comm_direction, interface_drone_comm,
@@ -206,7 +206,7 @@ class DBProtocol:
         return num
 
     def send_dronebridge_frame(self):
-        DroneBridgeFrame = b'$TY' + self.short_mode.encode() + chr(int(psutil.cpu_percent(interval=None))).encode() + \
+        DroneBridgeFrame = b'$TY' + self.short_mode.encode() + b'\x00' + \
                            bytes([self.signal]) + b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
         self.sendto_groundstation(DroneBridgeFrame, PORT_TELEMETRY)
 
@@ -247,7 +247,7 @@ class DBProtocol:
         if (radiotap_header_length + payload_length + DB_80211_HEADER_LENGTH + 20)>len(packet):
             return True
         else:
-            print(self.tag+ "Found a DroneBridge Frame that is not OK - ignoring it")
+            print(self.tag+ "Found a DroneBridge frame that is not OK - ignoring it")
             return False
 
     def _process_smartphonecommand(self, raw_data, thelast_keepalive):

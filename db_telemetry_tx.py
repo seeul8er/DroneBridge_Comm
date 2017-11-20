@@ -68,7 +68,6 @@ def main():
 
     src = find_mac(interface_drone_comm)
     comm_id = bytes(b'\x01'+b'\x01'+bytearray.fromhex(parsedArgs.comm_id))
-    # print("DB_TX_TEL: Communication ID: " + comm_id.hex()) # only works in python 3.5
     print("DB_TX_TEL: Communication ID: " + str(comm_id))
 
     dbprotocol = DBProtocol(src, dst, UDP_Port_RX, IP_RX, 1606, b'\x01', interface_drone_comm, mode,
@@ -79,17 +78,16 @@ def main():
 
     while True:
         received = dbprotocol.receive_telemetryfromdrone()
-        #received= b'$TA\x00\x00\x01\x00\xf0\x00\xf1'
-        #time.sleep(0.15)
         if received != False:
             try:
+                # TODO: deprecated --> use status module
                 if received[2] == 89:  # int("59", 16)
                     received = dbprotocol.finish_dronebridge_ltmframe(received)
-                    # send a beaconframe so drone telemetry can extract signal strength. MSP RSSI over AUX is also a option
+                    # send a beacon frame so drone telemetry can extract signal strength. MSP RSSI over AUX is also a option
                     # Then RSSI field in LTM would be set correctly. But RSSI would be in % which is worse compared to dbm
                     dbprotocol.send_beacon()
                 write_tofifos(received)
-                sent = dbprotocol.sendto_smartphone(received, dbprotocol.LTM_PORT_SMARTPHONE)
+                sent = dbprotocol.sendto_smartphone(received, dbprotocol.TEL_PORT_SMARTPHONE)
                 #print("DB_TX_TEL: Sent "+str(sent)+" bytes to sp")
             except Exception as e:
                 print(e)
