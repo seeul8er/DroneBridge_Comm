@@ -159,18 +159,19 @@ def main():
                     LTM_Frame = read_LTM_Frame(tel_sock.read(), tel_sock)
                     dbprotocol.sendto_groundstation(LTM_Frame, b'\x02')
                     # TODO: deprecated, use control module (drone) --> status module (ground)
-                    if LTM_Frame[2] == 83:  # int("53", 16) --> 0x53 = S in UTF-8 --> sending frame after each status frame
-                        dbprotocol.send_dronebridge_frame()
+                    # if LTM_Frame[2] == 83:  # int("53", 16) --> 0x53 = S in UTF-8 --> sending frame after each status frame
+                        # dbprotocol.send_dronebridge_frame()
                 # TODO: deprecated, use control module (drone) --> status module (ground)
-                dbprotocol.receive_process_datafromgroundstation()  # to get the beacon frame and its RSSI values
+                # dbprotocol.receive_process_datafromgroundstation()  # to get the beacon frame and its RSSI values
             else:
                 # it is not LTM --> fully transparent link for MavLink and other protocols
                 dbprotocol.sendto_groundstation(tel_sock.read(MavLink_junksize), b'\x02')
         if not istelemetryenabled and isLTMTel:
             # TODO: deprecated, use control module (drone) --> status module (ground)
+            pass
             # DroneBridge LTM Frame is triggered from telemetry. If telemetry is "no" we need to change trigger
-            dbprotocol.send_dronebridge_frame()
-            time.sleep(0.2)
+            # dbprotocol.send_dronebridge_frame()
+            # time.sleep(0.2)
 
 
 if __name__ == "__main__":

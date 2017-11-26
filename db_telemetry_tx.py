@@ -81,11 +81,11 @@ def main():
         if received != False:
             try:
                 # TODO: deprecated --> use status module
-                if received[2] == 89:  # int("59", 16)
-                    received = dbprotocol.finish_dronebridge_ltmframe(received)
+                # if received[2] == 89:  # int("59", 16)
+                    # received = dbprotocol.finish_dronebridge_ltmframe(received)
                     # send a beacon frame so drone telemetry can extract signal strength. MSP RSSI over AUX is also a option
                     # Then RSSI field in LTM would be set correctly. But RSSI would be in % which is worse compared to dbm
-                    dbprotocol.send_beacon()
+                    # dbprotocol.send_beacon()
                 write_tofifos(received)
                 sent = dbprotocol.sendto_smartphone(received, dbprotocol.TEL_PORT_SMARTPHONE)
                 #print("DB_TX_TEL: Sent "+str(sent)+" bytes to sp")
