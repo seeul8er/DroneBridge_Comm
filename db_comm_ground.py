@@ -14,7 +14,7 @@ dst = b''   # MAC address of RX-Pi (TP-Link) - mac of drone
 
 
 def parsearguments():
-    parser = argparse.ArgumentParser(description='Put this file on TX (drone). It handles telemetry, GoPro settings'
+    parser = argparse.ArgumentParser(description='Put this file on the groundstation. It handles GoPro settings'
                                                  ' and communication with smartphone')
     parser.add_argument('-i', action='store', dest='interface_drone_comm',
                         help='Network interface on which we send out packets to MSP-pass through. Should be interface '
@@ -57,7 +57,7 @@ def main():
     src = find_mac(interface_drone_comm)
     extended_comm_id = bytes(b'\x01'+b'\x01'+bytearray.fromhex(parsedArgs.comm_id)) # <odd><direction><comm_id>
     # print("DB_TX_Comm: Communication ID: " + comm_id.hex()) # only works in python 3.5+
-    print("DB_TX_Comm: Communication ID: " + str(extended_comm_id))
+    print("DB_Comm_GROUND: Communication ID: " + str(extended_comm_id))
 
     dbprotocol = DBProtocol(src, dst, UDP_Port_RX, IP_RX, UDP_PORT_ANDROID, b'\x01', interface_drone_comm, mode,
                             extended_comm_id, frame_type, b'\x04')

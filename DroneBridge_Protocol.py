@@ -253,7 +253,7 @@ class DBProtocol:
     def _process_smartphonecommand(self, raw_data, thelast_keepalive):
         try:
             raw_data_decoded = bytes.decode(raw_data)
-            print("Received from SP: " + raw_data_decoded)
+            print(self.tag + "Received from SP: " + raw_data_decoded)
             if raw_data == "smartphone_is_still_here":
                 return time.time()
         except UnicodeDecodeError as unicodeerr:
@@ -321,10 +321,10 @@ class DBProtocol:
             self._clear_monitor_comm_socket_buffer()
             self.first_run = False
         self._sendto_drone(raw_data_encoded, PORT_COMMUNICATION)
-        print("Forwarding to drone:")
+        print(self.tag + "Forwarding to drone:")
         print(raw_data_encoded)
         response = self.receive_datafromdrone()
-        print("Parsed packet received from drone:")
+        print(self.tag + "Parsed packet received from drone:")
         print(response)
         return response
 
@@ -441,5 +441,4 @@ class DBProtocol:
             address = ('', self.udp_port_smartphone)
             sock.bind(address)
         sock.setblocking(False)
-        print("Done")
         return sock

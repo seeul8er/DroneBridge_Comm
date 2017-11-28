@@ -24,7 +24,7 @@ MavLink_junksize = 128 # bytes
 
 
 def openTXUDP_Socket():
-    print("DB_RX_TEL: Opening UDP-Socket towards TX-Pi - listening on port " + str(UDP_Port_TX))
+    print("DB_TEL_AIR: Opening UDP-Socket towards TX-Pi - listening on port " + str(UDP_Port_TX))
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     server_address = ('', UDP_Port_TX)
     sock.bind(server_address)
@@ -32,7 +32,7 @@ def openTXUDP_Socket():
 
 
 def openFCTel_Socket():
-    print("DB_RX_TEL: Opening Telemetrie-Socket " + SerialPort + " (to listen to FC)")
+    print("DB_TEL_AIR: Opening Telemetrie-Socket " + SerialPort + " (to listen to FC)")
     ser = serial.Serial(SerialPort, timeout=None)
     return ser
 
@@ -68,7 +68,7 @@ def isitLTM_telemetry(telemetry_socket):
                 if check_LTM_crc_valid(read_LTM_Frame(telemetry_socket.read(), telemetry_socket)):
                     print("DB_RX_TEL: Detected LTM telemetry stream")
                     return True
-    print("DB_RX_TEL: Detected possible MavLink telemetry stream.")
+    print("DB_TEL_AIR: Detected possible MavLink telemetry stream.")
     return False
 
 
@@ -86,7 +86,7 @@ def setupVideo(mode):
 
 
 def parseArguments():
-    parser = argparse.ArgumentParser(description='Put this file on RX (drone). It handles telemetry and GoPro settings.')
+    parser = argparse.ArgumentParser(description='Put this file on your drone. It handles telemetry.')
     parser.add_argument('-i', action='store', dest='DB_INTERFACE',
                         help='Network interface on which we send out packets to drone. Should be interface '
                              'for long range comm (default: wlan1)',
@@ -140,7 +140,7 @@ def main():
     src = find_mac(DB_INTERFACE)
     comm_id = bytes(b'\x01'+b'\x02'+bytearray.fromhex(parsedArgs.comm_id))
     # print("DB_RX_TEL: Communication ID: " + comm_id.hex()) # only works in python 3.5
-    print("DB_RX_TEL: Communication ID: " + str(comm_id))
+    print("DB_TEL_AIR: Communication ID: " + str(comm_id))
     dbprotocol = DBProtocol(src, dst, UDP_Port_TX, IP_TX, 0, b'\x02', DB_INTERFACE, mode, comm_id, frame_type, b'\x02')
 
 

@@ -26,12 +26,12 @@ def write_tofifos(received_bytes):
         # print("DB_TX_TEL: Broken pipe: "+str(bperr.strerror))
         return False
     except OSError as oserr:
-        print("DB_TX_TEL: Pipe might not be opened yet: "+str(oserr.strerror))
+        print("DB_TEL_GROUND: Pipe might not be opened yet: "+str(oserr.strerror))
         return False
 
 
 def parsearguments():
-    parser = argparse.ArgumentParser(description='Put this file on TX (groundstation). It handles telemetry, GoPro settings'
+    parser = argparse.ArgumentParser(description='Put this file on the groundstation. It handles telemetry, GoPro settings'
                                                  ' and communication with smartphone')
     parser.add_argument('-i', action='store', dest='interface_drone_comm',
                         help='Network interface on which we send out packets to MSP-pass through. Should be interface '
@@ -68,13 +68,13 @@ def main():
 
     src = find_mac(interface_drone_comm)
     comm_id = bytes(b'\x01'+b'\x01'+bytearray.fromhex(parsedArgs.comm_id))
-    print("DB_TX_TEL: Communication ID: " + str(comm_id))
+    print("DB_TEL_GROUND: Communication ID: " + str(comm_id))
 
     dbprotocol = DBProtocol(src, dst, UDP_Port_RX, IP_RX, 1606, b'\x01', interface_drone_comm, mode,
                             comm_id, frame_type, b'\x02')
-    print("DB_TX_TEL: Opening /root/telemetryfifo1...")
+    print("DB_TEL_GROUND: Opening /root/telemetryfifo1...")
     fifo_write = open("/root/telemetryfifo1", "wb")
-    print("DB_TX_TEL: Opened /root/telemetryfifo1")
+    print("DB_TEL_GROUND: Opened /root/telemetryfifo1")
 
     while True:
         received = dbprotocol.receive_telemetryfromdrone()
