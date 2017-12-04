@@ -3,15 +3,11 @@ import argparse
 from DroneBridge_Protocol import DBProtocol
 from db_comm_helper import find_mac
 
-# Default values, may get overridden by command line arguments
-
-
 UDP_Port_RX = 1604  # Port for communication with RX (Drone)
 IP_RX = '192.168.3.1'  # Target IP address (IP address of the Pi on the Drone: needs fixed one)
 UDP_PORT_ANDROID = 1605  # Port for communication with smartphone (port on groundstation side)
 UDP_buffersize = 512  # bytes
 interface_drone_comm = "000ee8dcaa2c"
-dst = b''   # MAC address of RX-Pi (TP-Link) - mac of drone
 pipenames = ["telemetryfifo1", "telemetryfifo2", "telemetryfifo3", "telemetryfifo4", "telemetryfifo5", "telemetryfifo6"]
 pipes = []
 fifo_write = None
@@ -31,8 +27,8 @@ def write_tofifos(received_bytes):
 
 
 def parsearguments():
-    parser = argparse.ArgumentParser(description='Put this file on the groundstation. It handles telemetry, GoPro settings'
-                                                 ' and communication with smartphone')
+    parser = argparse.ArgumentParser(description='Put this file on the groundstation. It handles telemetry, GoPro '
+                                                 'settings and communication with smartphone')
     parser.add_argument('-i', action='store', dest='interface_drone_comm',
                         help='Network interface on which we send out packets to MSP-pass through. Should be interface '
                         'for long range comm (default: wlan1)',
@@ -49,11 +45,10 @@ def parsearguments():
                         help='Set the mode in which communication should happen. Use [wifi|monitor]',
                         default='monitor')
     parser.add_argument('-a', action='store', dest='frame_type',
-                        help='Specify frame type. Use <1> for Ralink chips (data frame) and <2> for Atheros chips '
-                             '(beacon frame). No CTS supported. Options [1|2]', default='1')
+                        help='Specify frame type. Options [1|2]', default='1')
     parser.add_argument('-c', action='store', dest='comm_id',
-                        help='Communication ID must be the same on drone and groundstation. 8 characters long. Allowed '
-                             'chars are (0123456789abcdef) Example: "aabb0011"', default='aabbccdd')
+                        help='Communication ID must be the same on drone and groundstation. 2 characters long. Allowed '
+                             'chars are (0123456789abcdef) Example: "b2"', default='01')
     return parser.parse_args()
 
 
@@ -67,10 +62,10 @@ def main():
     frame_type = parsedArgs.frame_type
 
     src = find_mac(interface_drone_comm)
-    comm_id = bytes(b'\x01'+b'\x01'+bytearray.fromhex(parsedArgs.comm_id))
+    comm_id = bytes(bytearray.fromhex(parsedArgs.comm_id))
     print("DB_TEL_GROUND: Communication ID: " + str(comm_id))
 
-    dbprotocol = DBProtocol(src, dst, UDP_Port_RX, IP_RX, 1606, b'\x01', interface_drone_comm, mode,
+    dbprotocol = DBProtocol(src, UDP_Port_RX, IP_RX, 1606, b'\x01', interface_drone_comm, mode,
                             comm_id, frame_type, b'\x02')
     print("DB_TEL_GROUND: Opening /root/telemetryfifo1...")
     fifo_write = open("/root/telemetryfifo1", "wb")
@@ -80,16 +75,12 @@ def main():
         received = dbprotocol.receive_telemetryfromdrone()
         if received != False:
             try:
-                # TODO: deprecated --> use status module
-                # if received[2] == 89:  # int("59", 16)
-                    # received = dbprotocol.finish_dronebridge_ltmframe(received)
-                    # send a beacon frame so drone telemetry can extract signal strength. MSP RSSI over AUX is also a option
-                    # Then RSSI field in LTM would be set correctly. But RSSI would be in % which is worse compared to dbm
-                    # dbprotocol.send_beacon()
                 write_tofifos(received)
-                sent = dbprotocol.sendto_smartphone(received, dbprotocol.TEL_PORT_SMARTPHONE)
-                #print("DB_TX_TEL: Sent "+str(sent)+" bytes to sp")
+                sent = dbprotocol.sendto_smartphone(received, dbprotocol.APP_PORT_TEL)
+                # print("DB_TX_TEL: Sent "+str(sent)+" bytes to sp")
             except Exception as e:
                 print(e)
+
+
 if __name__ == "__main__":
     main()

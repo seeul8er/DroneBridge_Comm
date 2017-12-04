@@ -6,21 +6,18 @@ from DroneBridge_Protocol import DBProtocol
 from db_comm_helper import find_mac
 import time
 
-# Default values, may get overridden by command line arguments
 
 UDP_Port_TX = 1604  # Port for communication with TX (Groundstation)
 IP_TX = "192.168.3.2"   # Target IP address (IP address of the Groundstation - not important and gets overridden anyways)
 UDP_buffersize = 512  # bytes
 SerialPort = '/dev/ttyAMA0'  # connect this one to your flight controller
-AB_INTERFACE = "wlan1"
 
 # LTM: payload+crc
 LTM_sizeGPS = 15
 LTM_sizeAtt = 7
 LTM_sizeStatus = 8
-dst = b''
 
-MavLink_junksize = 128 # bytes
+MavLink_junksize = 128  # bytes
 
 
 def openTXUDP_Socket():
@@ -111,11 +108,10 @@ def parseArguments():
                         help='Set the mode in which communication should happen. Use [wifi|monitor]',
                         default='monitor')
     parser.add_argument('-a', action='store', dest='frame_type',
-                        help='Specify frame type. Use <1> for Ralink chips (data frame) and <2> for Atheros chips '
-                             '(beacon frame). No CTS supported. Options [1|2]', default='1')
+                        help='Specify frame type. Options [1|2]', default='1')
     parser.add_argument('-c', action='store', dest='comm_id',
-                        help='Communication ID must be the same on drone and groundstation. 8 characters long. Allowed '
-                             'chars are (0123456789abcdef) Example: "aabb0011"', default='aabbccdd')
+                        help='Communication ID must be the same on drone and groundstation. 2 characters long. Allowed '
+                             'chars are (0123456789abcdef) Example: "b3"', default='01')
     return parser.parse_args()
 
 
@@ -138,10 +134,10 @@ def main():
         telemetry_selection_auto = True
         isLTMTel = False
     src = find_mac(DB_INTERFACE)
-    comm_id = bytes(b'\x01'+b'\x02'+bytearray.fromhex(parsedArgs.comm_id))
+    comm_id = bytes(bytearray.fromhex(parsedArgs.comm_id))
     # print("DB_RX_TEL: Communication ID: " + comm_id.hex()) # only works in python 3.5
     print("DB_TEL_AIR: Communication ID: " + str(comm_id))
-    dbprotocol = DBProtocol(src, dst, UDP_Port_TX, IP_TX, 0, b'\x02', DB_INTERFACE, mode, comm_id, frame_type, b'\x02')
+    dbprotocol = DBProtocol(src, UDP_Port_TX, IP_TX, 0, b'\x03', DB_INTERFACE, mode, comm_id, frame_type, b'\x02')
 
 
     if istelemetryenabled:
@@ -158,20 +154,9 @@ def main():
                     tel_sock.read()  # next one is always a 'T' (do not care)
                     LTM_Frame = read_LTM_Frame(tel_sock.read(), tel_sock)
                     dbprotocol.sendto_groundstation(LTM_Frame, b'\x02')
-                    # TODO: deprecated, use control module (drone) --> status module (ground)
-                    # if LTM_Frame[2] == 83:  # int("53", 16) --> 0x53 = S in UTF-8 --> sending frame after each status frame
-                        # dbprotocol.send_dronebridge_frame()
-                # TODO: deprecated, use control module (drone) --> status module (ground)
-                # dbprotocol.receive_process_datafromgroundstation()  # to get the beacon frame and its RSSI values
             else:
                 # it is not LTM --> fully transparent link for MavLink and other protocols
                 dbprotocol.sendto_groundstation(tel_sock.read(MavLink_junksize), b'\x02')
-        if not istelemetryenabled and isLTMTel:
-            # TODO: deprecated, use control module (drone) --> status module (ground)
-            pass
-            # DroneBridge LTM Frame is triggered from telemetry. If telemetry is "no" we need to change trigger
-            # dbprotocol.send_dronebridge_frame()
-            # time.sleep(0.2)
 
 
 if __name__ == "__main__":

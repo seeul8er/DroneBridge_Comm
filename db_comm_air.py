@@ -1,10 +1,8 @@
 import argparse
-import time
 from subprocess import Popen
 from DroneBridge_Protocol import DBProtocol
 from db_comm_helper import find_mac
 
-# Default values, may get overridden by command line arguments
 
 UDP_Port_TX = 1604  # Port for communication with TX (Groundstation)
 IP_TX = "192.168.3.2"   # Target IP address (IP address of the Groundstation - not important and gets overridden anyways)
@@ -37,11 +35,10 @@ def parseArguments():
                         help='Set the mode in which communication should happen. Use [wifi|monitor]',
                         default='monitor')
     parser.add_argument('-a', action='store', dest='frame_type',
-                        help='Specify frame type. Use <1> for Ralink chips (data frame) and <2> for Atheros chips '
-                             '(beacon frame). No CTS supported. Options [1|2]', default='1')
+                        help='Specify frame type. Options [1|2]', default='1')
     parser.add_argument('-c', action='store', dest='comm_id',
-                        help='Communication ID must be the same on drone and groundstation. 8 characters long. Allowed '
-                             'chars are (0123456789abcdef) Example: "aabb0011"', default='aabbccdd')
+                        help='Communication ID must be the same on drone and groundstation. 2 characters long. Allowed '
+                             'chars are (0123456789abcdef) Example: "b2"', default='01')
     return parser.parse_args()
 
 
@@ -53,13 +50,11 @@ def main():
     frame_type = parsedArgs.frame_type
     DB_INTERFACE = parsedArgs.DB_INTERFACE
     src = find_mac(DB_INTERFACE)
-    extended_comm_id = bytes(b'\x01'+b'\x02'+bytearray.fromhex(parsedArgs.comm_id)) # <odd><direction><comm_id>
+    extended_comm_id = bytes(bytearray.fromhex(parsedArgs.comm_id))
     # print("DB_TX_Comm: Communication ID: " + comm_id.hex()) # only works in python 3.5+
     print("DB_RX_Comm: Communication ID: " + str(extended_comm_id))
-    dbprotocol = DBProtocol(src, dst, UDP_Port_TX, IP_TX, 0, b'\x02', DB_INTERFACE, mode, extended_comm_id, frame_type, b'\x04')
+    dbprotocol = DBProtocol(src, UDP_Port_TX, IP_TX, 0, b'\x03', DB_INTERFACE, mode, extended_comm_id, frame_type, b'\x04')
 
-    #setupVideo(mode)
-    #time.sleep(2)
     while True:
         dbprotocol.receive_process_datafromgroundstation() # blocking
 
