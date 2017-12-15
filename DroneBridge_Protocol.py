@@ -56,9 +56,9 @@ class DBProtocol:
         else:
             self.short_mode = 'm'
         if frame_type == '1':
-            self.fcf = b'\xb4\x00' # RTS frames
+            self.fcf = b'\xb4\x00'  # RTS frames
         else:
-            self.fcf = b'\x08\x00' # Data frames
+            self.fcf = b'\x08\x00'  # Data frames
         self.db_port = dronebridge_port
         self.comm_sock = self._open_comm_sock()
         if self.comm_direction == TO_DRONE:
@@ -140,8 +140,8 @@ class DBProtocol:
                     try:
                         if not self._route_db_comm_protocol(db_comm_prot_request):
                             print(self.tag + "smartphone request could not be processed correctly")
-                    except UnicodeDecodeError as e:
-                        print(self.tag+ "Received message not UTF-8 conform. Maybe a invalid packet in the buffer.")
+                    except (UnicodeDecodeError, ValueError):
+                        print(self.tag + "Received message from groundstation with error. Not UTF error or ValueError")
 
     def process_smartphonerequests(self, last_keepalive):
         """See if smartphone told the groundstation to do something. Returns recent keep-alive time"""
@@ -318,7 +318,8 @@ class DBProtocol:
         """Send a packet in monitor mode using DroneBridge raw protocol v2"""
         payload_length_bytes = bytes(len(data_bytes).to_bytes(2, byteorder='little', signed=False))
         # TODO: add sequence number
-        db_v2_raw_header = bytes(bytearray(self.fcf + direction + self.comm_id + port_bytes + payload_length_bytes + 0x00))
+        db_v2_raw_header = bytes(bytearray(self.fcf + direction + self.comm_id + port_bytes + payload_length_bytes +
+                                           b'\x00'))
         while True:
             r, w, e = select.select([], [self.comm_sock], [], 0)
             if w:

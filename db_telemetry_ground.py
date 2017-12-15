@@ -29,7 +29,7 @@ def write_tofifos(received_bytes):
 def parsearguments():
     parser = argparse.ArgumentParser(description='Put this file on the groundstation. It handles telemetry, GoPro '
                                                  'settings and communication with smartphone')
-    parser.add_argument('-i', action='store', dest='interface_drone_comm',
+    parser.add_argument('-n', action='store', dest='interface_drone_comm',
                         help='Network interface on which we send out packets to MSP-pass through. Should be interface '
                         'for long range comm (default: wlan1)',
                         default='wlan1')
@@ -46,9 +46,9 @@ def parsearguments():
                         default='monitor')
     parser.add_argument('-a', action='store', dest='frame_type',
                         help='Specify frame type. Options [1|2]', default='1')
-    parser.add_argument('-c', action='store', dest='comm_id',
-                        help='Communication ID must be the same on drone and groundstation. 2 characters long. Allowed '
-                             'chars are (0123456789abcdef) Example: "b2"', default='01')
+    parser.add_argument('-c', action='store', type=int, dest='comm_id',
+                        help='Communication ID must be the same on drone and groundstation. A number between 0-255 '
+                             'Example: "125"', default='111')
     return parser.parse_args()
 
 
@@ -62,7 +62,7 @@ def main():
     frame_type = parsedArgs.frame_type
 
     src = find_mac(interface_drone_comm)
-    comm_id = bytes(bytearray.fromhex(parsedArgs.comm_id))
+    comm_id = bytes([parsedArgs.comm_id])
     print("DB_TEL_GROUND: Communication ID: " + str(comm_id))
 
     dbprotocol = DBProtocol(src, UDP_Port_RX, IP_RX, 1606, b'\x01', interface_drone_comm, mode,

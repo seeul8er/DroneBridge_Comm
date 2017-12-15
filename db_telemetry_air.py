@@ -84,18 +84,13 @@ def setupVideo(mode):
 
 def parseArguments():
     parser = argparse.ArgumentParser(description='Put this file on your drone. It handles telemetry.')
-    parser.add_argument('-i', action='store', dest='DB_INTERFACE',
+    parser.add_argument('-n', action='store', dest='DB_INTERFACE',
                         help='Network interface on which we send out packets to drone. Should be interface '
                              'for long range comm (default: wlan1)',
                         default='wlan1')
     parser.add_argument('-f', action='store', dest='serialport', help='Serial port which is connected to flight controller'
                                                                       ' and receives the telemetry (default: /dev/ttyAMA0)',
                         default='/dev/ttyAMA0')
-    parser.add_argument('-t', action='store', dest='enable_telemetry',
-                        help='Enables LTM over DroneBridge Protocol. Enable if you want to receive LTM from FC and pass'
-                             ' it on to the groundstation via DroneBridge-Protocol. Disable wifibroadcast telemetry to '
-                             'not block the socket. Use [yes|no]',
-                        default='no')
     parser.add_argument('-l', action='store', dest='telemetry_type',
                         help='Set telemetry type manually. Default is [auto]. Use [ltm|mavlink|auto]',
                         default='auto')
@@ -109,9 +104,9 @@ def parseArguments():
                         default='monitor')
     parser.add_argument('-a', action='store', dest='frame_type',
                         help='Specify frame type. Options [1|2]', default='1')
-    parser.add_argument('-c', action='store', dest='comm_id',
-                        help='Communication ID must be the same on drone and groundstation. 2 characters long. Allowed '
-                             'chars are (0123456789abcdef) Example: "b3"', default='01')
+    parser.add_argument('-c', action='store', type=int, dest='comm_id',
+                        help='Communication ID must be the same on drone and groundstation. A number between 0-255 '
+                             'Example: "125"', default='111')
     return parser.parse_args()
 
 
@@ -120,9 +115,6 @@ def main():
     parsedArgs = parseArguments()
     SerialPort = parsedArgs.serialport
     UDP_Port_TX = parsedArgs.udp_port_tx
-    istelemetryenabled = False
-    if parsedArgs.enable_telemetry == "yes":
-        istelemetryenabled = True
     mode = parsedArgs.mode
     frame_type = parsedArgs.frame_type
     DB_INTERFACE = parsedArgs.DB_INTERFACE
@@ -134,29 +126,27 @@ def main():
         telemetry_selection_auto = True
         isLTMTel = False
     src = find_mac(DB_INTERFACE)
-    comm_id = bytes(bytearray.fromhex(parsedArgs.comm_id))
+    comm_id = bytes([parsedArgs.comm_id])
     # print("DB_RX_TEL: Communication ID: " + comm_id.hex()) # only works in python 3.5
     print("DB_TEL_AIR: Communication ID: " + str(comm_id))
     dbprotocol = DBProtocol(src, UDP_Port_TX, IP_TX, 0, b'\x03', DB_INTERFACE, mode, comm_id, frame_type, b'\x02')
 
 
-    if istelemetryenabled:
-        tel_sock = openFCTel_Socket()
-        time.sleep(0.3)
-        if telemetry_selection_auto:
-            isLTMTel = isitLTM_telemetry(tel_sock)
+    tel_sock = openFCTel_Socket()
+    time.sleep(0.3)
+    if telemetry_selection_auto:
+        isLTMTel = isitLTM_telemetry(tel_sock)
     time.sleep(0.3)
 
     while True:
-        if istelemetryenabled:
-            if isLTMTel:
-                if tel_sock.read() == b'$':
-                    tel_sock.read()  # next one is always a 'T' (do not care)
-                    LTM_Frame = read_LTM_Frame(tel_sock.read(), tel_sock)
-                    dbprotocol.sendto_groundstation(LTM_Frame, b'\x02')
-            else:
-                # it is not LTM --> fully transparent link for MavLink and other protocols
-                dbprotocol.sendto_groundstation(tel_sock.read(MavLink_junksize), b'\x02')
+        if isLTMTel:
+            if tel_sock.read() == b'$':
+                tel_sock.read()  # next one is always a 'T' (do not care)
+                LTM_Frame = read_LTM_Frame(tel_sock.read(), tel_sock)
+                dbprotocol.sendto_groundstation(LTM_Frame, b'\x02')
+        else:
+            # it is not LTM --> fully transparent link for MavLink and other protocols
+            dbprotocol.sendto_groundstation(tel_sock.read(MavLink_junksize), b'\x02')
 
 
 if __name__ == "__main__":
